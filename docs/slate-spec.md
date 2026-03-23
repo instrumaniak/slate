@@ -60,6 +60,172 @@ The codebase is split into four strict layers. **Lower layers never import from 
 - **UI layer**: GTK widgets and window layout. Calls services; listens to event bus. Never calls `gitpython` or `open()` directly.
 - **Plugin layer**: Each plugin is a self-contained package depending only on core ABCs. Plugins contribute activity bar icons, panel widgets, actions, and keybindings through `PluginContext`.
 
+#### Core Interfaces (core/interfaces/)
+
+```python
+# core/interfaces/file_backend.py
+from abc import ABC, abstractmethod
+from typing import Callable
+
+class ReadableBackend(ABC):
+    """Abstract interface for reading files."""
+    
+    @abstractmethod
+    def read(self, path: str) -> str:
+        """Read file contents. Raises exceptions on failure."""
+        ...
+    
+    @abstractmethod
+    def exists(self, path: str) -> bool:
+        """Check if file exists."""
+        ...
+    
+    @abstractmethod
+    def is_directory(self, path: str) -> bool:
+        """Check if path is a directory."""
+        ...
+    
+    @abstractmethod
+    def list_directory(self, path: str) -> list[str]:
+        """List directory contents. Raises NotADirectoryError."""
+        ...
+    
+    @abstractmethod
+    def monitor(self, path: str, callback: Callable[[str, object], None]) -> object:
+        """Return a file monitor. callback receives (path, event_type)."""
+        ...
+
+class WritableBackend(ReadableBackend):
+    """Abstract interface for reading and writing files."""
+    
+    @abstractmethod
+    def write(self, path: str, content: str) -> None:
+        """Write file contents. Creates parent directories if needed."""
+        ...
+    
+    @abstractmethod
+    def delete(self, path: str) -> None:
+        """Delete a file. Raises exception on failure."""
+        ...
+    
+    @abstractmethod
+    def create_directory(self, path: str) -> None:
+        """Create a directory. Creates parent dirs if needed."""
+        ...
+    
+    @abstractmethod
+    def rename(self, old_path: str, new_path: str) -> None:
+        """Rename a file or directory."""
+        ...
+```
+
+```python
+# core/interfaces/vcs_backend.py
+from abc import ABC, abstractmethod
+
+class AbstractVCSBackend(ABC):
+    """Abstract interface for version control systems."""
+    
+    @abstractmethod
+    def is_repo(self) -> bool:
+        """Check if path is a repository."""
+        ...
+    
+    @abstractmethod
+    def get_status(self) -> list[FileStatus]:
+        """Get working tree status."""
+        ...
+    
+    @abstractmethod
+    def stage(self, paths: list[str]) -> None:
+        """Stage files."""
+        ...
+    
+    @abstractmethod
+    def unstage(self, paths: list[str]) -> None:
+        """Unstage files."""
+        ...
+    
+    @abstractmethod
+    def commit(self, message: str) -> None:
+        """Commit staged changes."""
+        ...
+    
+    @abstractmethod
+    def get_diff(self, path: str | None, staged: bool) -> str:
+        """Get diff output."""
+        ...
+    
+    @abstractmethod
+    def get_current_branch(self) -> str:
+        """Get current branch name."""
+        ...
+    
+    @abstractmethod
+    def list_branches(self) -> list[BranchInfo]:
+        """List all branches."""
+        ...
+    
+    @abstractmethod
+    def checkout_branch(self, name: str) -> None:
+        """Checkout a branch."""
+        ...
+```
+
+```python
+# core/interfaces/search_backend.py
+from abc import ABC, abstractmethod
+
+class AbstractSearchBackend(ABC):
+    """Abstract interface for search implementations."""
+    
+    @abstractmethod
+    def search(
+        self,
+        query: "SearchQuery",
+        folder: str,
+        callback: Callable[[list[SearchResult]], None],
+    ) -> None:
+        """
+        Search folder for query. Results delivered via callback.
+        Callback receives list of SearchResult objects.
+        """
+        ...
+    
+    @abstractmethod
+    def replace_in_files(
+        self,
+        query: "SearchQuery",
+        replacement: str,
+        target_paths: list[str] | None,
+    ) -> "ReplaceSummary":
+        """
+        Replace matches in files. Returns summary of replacements.
+        """
+        ...
+```
+
+```python
+# core/interfaces/language_detector.py
+from abc import ABC, abstractmethod
+
+class AbstractLanguageDetector(ABC):
+    """Abstract interface for language detection."""
+    
+    @abstractmethod
+    def detect(self, path: str) -> object | None:
+        """
+        Detect language for file path.
+        Returns GtkSource.Language or None if not detected.
+        """
+        ...
+    
+    @abstractmethod
+    def list_languages(self) -> list[str]:
+        """List all available language names."""
+        ...
+```
+
 ---
 
 ### 3.2 Plugin System Architecture
@@ -137,11 +303,38 @@ class HostUIBridge(Protocol):
 
 class PluginContext:
     """The ONLY host interface available to plugins."""
-    def get_service(self, service_id: str) -> object: ...
-    def get_event_bus(self) -> "EventBus": ...
-    def get_config(self, plugin_id: str) -> dict: ...
-    def set_config(self, plugin_id: str, data: dict) -> None: ...
-    def get_ui(self) -> HostUIBridge: ...
+    def __init__(
+        self,
+        service_registry: dict[str, object],
+        event_bus: "EventBus",
+        config_service: "ConfigService",
+        host_ui: HostUIBridge,
+    ) -> None:
+        """Initialize with all dependencies injected."""
+        self._services = service_registry
+        self._event_bus = event_bus
+        self._config = config_service
+        self._host_ui = host_ui
+    
+    def get_service(self, service_id: str) -> object:
+        """Return a service by ID. Raises KeyError if not found."""
+        return self._services[service_id]
+    
+    def get_event_bus(self) -> "EventBus":
+        """Return the event bus for subscribing/publishing."""
+        return self._event_bus
+    
+    def get_config(self, plugin_id: str) -> dict:
+        """Get plugin-specific configuration."""
+        return self._config.get_plugin_config(plugin_id)
+    
+    def set_config(self, plugin_id: str, data: dict) -> None:
+        """Set plugin-specific configuration."""
+        self._config.update_plugin_config(plugin_id, data)
+    
+    def get_ui(self) -> HostUIBridge:
+        """Return the host UI bridge for registering actions/panels/dialogs."""
+        return self._host_ui
 
 Service IDs reserved by the host shell:
 - `"file"` → `FileService`
@@ -264,6 +457,50 @@ Plugin registration rules:
 The typed `EventBus` is the **only** sideways communication channel. No module holds a direct reference to another module's objects.
 
 ```python
+# core/event_bus.py
+from typing import Callable, TypeVar, Generic
+from collections import defaultdict
+from dataclasses import dataclass
+import threading
+
+T = TypeVar('T')
+
+@dataclass
+class Event:
+    """Base class for all events. Use inheritance for typed events."""
+    pass
+
+class EventBus:
+    """Thread-safe event bus for decoupled communication."""
+    
+    def __init__(self) -> None:
+        self._subscribers: dict[type[Event], list[Callable[[Event], None]]] = defaultdict(list)
+        self._lock = threading.RLock()
+    
+    def subscribe(self, event_type: type[T], callback: Callable[[T], None]) -> None:
+        """Subscribe to a specific event type."""
+        with self._lock:
+            self._subscribers[event_type].append(callback)
+    
+    def unsubscribe(self, event_type: type[T], callback: Callable[[T], None]) -> None:
+        """Unsubscribe from a specific event type."""
+        with self._lock:
+            if callback in self._subscribers[event_type]:
+                self._subscribers[event_type].remove(callback)
+    
+    def emit(self, event: Event) -> None:
+        """Emit an event to all subscribers. Thread-safe."""
+        with self._lock:
+            for callback in self._subscribers[type(event)]:
+                callback(event)
+    
+    def clear(self) -> None:
+        """Clear all subscribers. For testing only."""
+        with self._lock:
+            self._subscribers.clear()
+```
+
+```python
 # core/events.py
 @dataclass
 class OpenFileRequestedEvent:
@@ -328,10 +565,61 @@ Every app-level mutating action is a `Command` object with `execute()` and optio
 
 ```python
 # core/commands.py
+from collections import deque
+
 class AbstractCommand(ABC):
     @abstractmethod
     def execute(self) -> None: ...
     def undo(self) -> None: ...  # base: no-op
+
+class CommandHistory:
+    """
+    Manages undo/redo for app-level commands.
+    Separate from buffer-level undo which is handled by GtkSource.Buffer.
+    """
+    
+    def __init__(self, max_history: int = 100) -> None:
+        self._undo_stack: deque[AbstractCommand] = deque(maxlen=max_history)
+        self._redo_stack: deque[AbstractCommand] = deque(maxlen=max_history)
+    
+    def execute(self, command: AbstractCommand) -> None:
+        """Execute a command and add to history."""
+        command.execute()
+        self._undo_stack.append(command)
+        self._redo_stack.clear()  # Clear redo stack on new command
+    
+    def undo(self) -> bool:
+        """Undo the last command. Returns True if successful."""
+        if not self._undo_stack:
+            return False
+        
+        command = self._undo_stack.pop()
+        command.undo()
+        self._redo_stack.append(command)
+        return True
+    
+    def redo(self) -> bool:
+        """Redo the last undone command. Returns True if successful."""
+        if not self._redo_stack:
+            return False
+        
+        command = self._redo_stack.pop()
+        command.execute()
+        self._undo_stack.append(command)
+        return True
+    
+    def can_undo(self) -> bool:
+        """Check if undo is available."""
+        return len(self._undo_stack) > 0
+    
+    def can_redo(self) -> bool:
+        """Check if redo is available."""
+        return len(self._redo_stack) > 0
+    
+    def clear(self) -> None:
+        """Clear all history."""
+        self._undo_stack.clear()
+        self._redo_stack.clear()
 
 class SaveFileCommand(AbstractCommand):
     def __init__(self, file_service, path, content): ...
@@ -356,15 +644,86 @@ Keyboard routing rules:
 ```python
 # ui/editor/editor_factory.py
 class EditorViewFactory:
-    def __init__(self, config_service, theme_service, language_detector): ...
-    def create(self, path: str | None) -> EditorView:
-        # Applies: font, tab width, line numbers, highlight line, colour scheme, language
-        # Returns fully configured, ready-to-insert widget
+    def __init__(self, config_service, theme_service, language_detector) -> None:
+        self._config = config_service
+        self._theme = theme_service
+        self._lang_detector = language_detector
+    
+    def create(self, path: str | None) -> "EditorView":
+        """Create a fully configured EditorView widget."""
+        view = EditorView()
+        settings = self._config.get_editor_settings()
+        view.apply_config(settings)
+        scheme = self._theme.resolve_editor_scheme()
+        view.apply_theme(scheme)
+        if path:
+            lang = self._lang_detector.detect(path)
+            view.set_language(lang)
+        return view
 ```
 
 `EditorViewFactory` must use `ThemeService` for the resolved editor scheme rather than reading theme keys directly from config.
 
-Preference changes call `EditorView.apply_config()` on all open views for editor settings. Theme changes call `EditorView.apply_theme()` on all open views based on `ThemeChangedEvent`.
+```python
+# ui/editor/editor_view.py
+class EditorView(GtkSource.View):
+    """Wrapper around GtkSource.View with config/theme support."""
+    
+    def __init__(self) -> None:
+        super().__init__()
+        self.set_show_line_numbers(True)
+        self.set_highlight_current_line(True)
+        self.set_auto_indent(True)
+        self.set_indent_width(4)
+        self.set_insert_spaces(True)
+        self.set_tab_width(4)
+    
+    def apply_config(self, settings: dict) -> None:
+        """Apply editor settings from config dict."""
+        if "font" in settings:
+            self.set_font(Pango.FontDescription(settings["font"]))
+        if "tab_width" in settings:
+            self.set_tab_width(int(settings["tab_width"]))
+        if "insert_spaces" in settings:
+            self.set_insert_spaces(settings["insert_spaces"].lower() == "true")
+        if "show_line_numbers" in settings:
+            self.set_show_line_numbers(settings["show_line_numbers"].lower() == "true")
+        if "highlight_current_line" in settings:
+            self.set_highlight_current_line(settings["highlight_current_line"].lower() == "true")
+        if "word_wrap" in settings:
+            wrap_mode = Gtk.WrapMode.WORD if settings["word_wrap"].lower() == "true" else Gtk.WrapMode.NONE
+            self.set_wrap_mode(wrap_mode)
+        if "auto_indent" in settings:
+            self.set_auto_indent(settings["auto_indent"].lower() == "true")
+    
+    def apply_theme(self, scheme_id: str) -> None:
+        """Apply a GtkSourceView color scheme."""
+        lang_mgr = GtkSource.LanguageManager.get_default()
+        scheme_mgr = GtkSource.StyleSchemeManager.get_default()
+        if scheme_id in scheme_mgr.get_scheme_ids():
+            scheme = scheme_mgr.get_scheme(scheme_id)
+            self.get_buffer().set_style_scheme(scheme)
+    
+    def set_language(self, language: GtkSource.Language | None) -> None:
+        """Set syntax highlighting language."""
+        if language:
+            self.get_buffer().set_language(language)
+    
+    def get_path(self) -> str | None:
+        """Get the file path for this view."""
+        return getattr(self, "_path", None)
+    
+    def set_path(self, path: str | None) -> None:
+        """Set the file path for this view."""
+        self._path = path
+    
+    def go_to_line(self, line: int, column: int = 1) -> None:
+        """Move cursor to specified line and column."""
+        buffer = self.get_buffer()
+        iter_pos = buffer.get_iter_at_line(line - 1)
+        iter_pos.forward_chars(column - 1)
+        buffer.place_cursor(iter_pos)
+        self.scroll_to_iter(iter_pos, 0.0, True, 0.0, 0.0)
 
 #### Strategy Pattern — search and language backends
 
@@ -372,6 +731,243 @@ Preference changes call `EditorView.apply_config()` on all open views for editor
   Default: `NativeSearchBackend` using `os.walk` + `mmap`. Future: ripgrep subprocess.
 - `AbstractLanguageDetector.detect(path) -> GtkSource.Language | None`  
   Default: `GtkSource.LanguageManager`. Future: tree-sitter.
+
+```python
+# services/language_detector.py
+import os
+from core.interfaces.language_detector import AbstractLanguageDetector
+
+class GtkSourceLanguageDetector(AbstractLanguageDetector):
+    """
+    Language detector using GtkSource.LanguageManager.
+    Uses lazy import to avoid GTK imports at module load time.
+    """
+    
+    _EXTENSION_MAP = {
+        ".py": "python",
+        ".pyw": "python",
+        ".js": "javascript",
+        ".mjs": "javascript",
+        ".cjs": "javascript",
+        ".ts": "typescript",
+        ".tsx": "typescript",
+        ".rs": "rust",
+        ".html": "html",
+        ".htm": "html",
+        ".css": "css",
+        ".scss": "scss",
+        ".json": "json",
+        ".md": "markdown",
+        ".sh": "bash",
+        ".bash": "bash",
+        ".yaml": "yaml",
+        ".yml": "yaml",
+        ".xml": "xml",
+        ".c": "c",
+        ".cpp": "cpp",
+        ".h": "c",
+        ".hpp": "cpp",
+        ".go": "go",
+        ".java": "java",
+    }
+    
+    def detect(self, path: str):
+        """Detect language for file path. Returns GtkSource.Language or None."""
+        # Lazy import to keep service layer GTK-free at import time
+        from gi.repository import GtkSource
+        
+        _, ext = os.path.splitext(path)
+        lang_id = self._EXTENSION_MAP.get(ext.lower())
+        
+        if not lang_id:
+            # Try guessing from filename
+            basename = os.path.basename(path)
+            lang_id = self._EXTENSION_MAP.get(basename.lower())
+        
+        if not lang_id:
+            return None
+        
+        lang_mgr = GtkSource.LanguageManager.get_default()
+        return lang_mgr.get_language(lang_id)
+    
+    def list_languages(self) -> list[str]:
+        """List all available language names."""
+        from gi.repository import GtkSource
+        lang_mgr = GtkSource.LanguageManager.get_default()
+        return lang_mgr.get_language_ids() or []
+```
+
+```python
+# services/local_file_backend.py
+import os
+from pathlib import Path
+from core.interfaces.file_backend import WritableBackend
+
+class LocalFileBackend(WritableBackend):
+    """File backend for local filesystem operations."""
+    
+    def read(self, path: str) -> str:
+        """Read file contents as string."""
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    
+    def write(self, path: str, content: str) -> None:
+        """Write content to file, creating parent directories."""
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+    
+    def exists(self, path: str) -> bool:
+        """Check if path exists."""
+        return os.path.exists(path)
+    
+    def is_directory(self, path: str) -> bool:
+        """Check if path is a directory."""
+        return os.path.isdir(path)
+    
+    def list_directory(self, path: str) -> list[str]:
+        """List directory contents."""
+        return os.listdir(path)
+    
+    def monitor(self, path: str, callback) -> object:
+        """Return a Gio.FileMonitor for the path."""
+        from gi.repository import Gio
+        gfile = Gio.File.new_for_path(path)
+        monitor = gfile.monitor(Gio.FileMonitorFlags.NONE, None)
+        # Connect callback to "changed" signal (simplified)
+        return monitor
+    
+    def delete(self, path: str) -> None:
+        """Delete a file."""
+        os.remove(path)
+    
+    def create_directory(self, path: str) -> None:
+        """Create a directory."""
+        Path(path).mkdir(parents=True, exist_ok=True)
+    
+    def rename(self, old_path: str, new_path: str) -> None:
+        """Rename a file or directory."""
+        os.rename(old_path, new_path)
+```
+
+```python
+# services/native_search_backend.py
+import os
+import re
+import mmap
+from core.interfaces.search_backend import AbstractSearchBackend
+from core.models import SearchResult, SearchQuery, ReplaceSummary
+
+class NativeSearchBackend(AbstractSearchBackend):
+    """Native search using os.walk and mmap."""
+    
+    _BINARY_EXTENSIONS = {
+        ".pyc", ".pyo", ".so", ".o", ".a", ".lib",
+        ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".ico",
+        ".pdf", ".zip", ".tar", ".gz", ".rar", ".7z",
+        ".exe", ".dll", ".so", ".dylib",
+    }
+    
+    def search(self, query: SearchQuery, folder: str, callback) -> None:
+        """Search folder for matches. Results delivered via callback."""
+        results = []
+        
+        pattern = self._build_pattern(query)
+        
+        for root, dirs, files in os.walk(folder):
+            # Skip hidden directories unless requested
+            if not query.include_hidden:
+                dirs[:] = [d for d in dirs if not d.startswith(".")]
+                files = [f for f in files if not f.startswith(".")]
+            
+            for filename in files:
+                path = os.path.join(root, filename)
+                if self._should_skip(path, query):
+                    continue
+                
+                try:
+                    matches = self._search_file(path, pattern, query)
+                    results.extend(matches)
+                except (OSError, PermissionError):
+                    continue
+        
+        callback(results)
+    
+    def _build_pattern(self, query: SearchQuery) -> re.Pattern:
+        """Build regex pattern from search query."""
+        flags = 0 if query.match_case else re.IGNORECASE
+        
+        if query.regex:
+            return re.compile(query.text, flags)
+        
+        # Escape special regex chars for literal search
+        escaped = re.escape(query.text)
+        
+        if query.whole_word:
+            escaped = r"\b" + escaped + r"\b"
+        
+        return re.compile(escaped, flags)
+    
+    def _search_file(self, path: str, pattern: re.Pattern, query: SearchQuery) -> list[SearchResult]:
+        """Search a single file for pattern matches."""
+        if query.glob and not self._matches_glob(os.path.basename(path), query.glob):
+            return []
+        
+        results = []
+        
+        # Skip binary files
+        if os.path.splitext(path)[1].lower() in self._BINARY_EXTENSIONS:
+            return []
+        
+        try:
+            with open(path, "rb") as f:
+                with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+                    text = mm.decode("utf-8", errors="ignore")
+                    for line_num, line in enumerate(text.splitlines(), 1):
+                        match = pattern.search(line)
+                        if match:
+                            results.append(SearchResult(
+                                path=path,
+                                line_number=line_num,
+                                line_content=line,
+                                match_start=match.start(),
+                                match_end=match.end(),
+                            ))
+        except (ValueError, OSError):
+            pass
+        
+        return results
+    
+    def _should_skip(self, path: str, query: SearchQuery) -> bool:
+        """Check if file should be skipped."""
+        if not query.include_hidden:
+            basename = os.path.basename(path)
+            if basename.startswith("."):
+                return True
+        
+        # Skip common non-text directories
+        parts = path.split(os.sep)
+        skip_dirs = {".git", "__pycache__", "node_modules", ".venv", "venv"}
+        if any(p in skip_dirs for p in parts):
+            return True
+        
+        return False
+    
+    def _matches_glob(self, filename: str, glob_pattern: str) -> bool:
+        """Simple glob matching."""
+        import fnmatch
+        return fnmatch.fnmatch(filename, glob_pattern)
+    
+    def replace_in_files(self, query: SearchQuery, replacement: str, target_paths: list[str] | None) -> ReplaceSummary:
+        """Replace matches in files."""
+        # Implementation would search and replace in target_paths
+        # Returns ReplaceSummary with counts and any failures
+        return ReplaceSummary(
+            files_changed=0,
+            replacements_made=0,
+            skipped_dirty_paths=[],
+            failed_paths=[],
+        )
 
 Swap either = new class only. Zero changes to callers.
 
@@ -391,6 +987,106 @@ GTK/libadwaita runtime application stays in the UI layer via a small helper such
 #### Minimal Service APIs (implementation contract)
 
 The following APIs are the minimum required public surface for v1. Implementers may add private helpers, but they must not bypass these ownership boundaries.
+
+```python
+# services/file_service.py
+from core.interfaces.file_backend import ReadableBackend, WritableBackend
+
+class FileService:
+    def __init__(self, backend: ReadableBackend | WritableBackend, event_bus: EventBus) -> None:
+        self._backend = backend
+        self._event_bus = event_bus
+        self._monitors: dict[str, object] = {}  # path -> Gio.FileMonitor
+    
+    def read(self, path: str) -> str:
+        """Read file contents. Raises SlateFileNotFoundError or SlatePermissionError."""
+        return self._backend.read(path)
+    
+    def write(self, path: str, content: str) -> None:
+        """Write file contents. Creates parent dirs if needed."""
+        self._backend.write(path, content)
+        self._event_bus.emit(FileSavedEvent(path=path))
+    
+    def exists(self, path: str) -> bool:
+        """Check if file exists."""
+        return self._backend.exists(path)
+    
+    def is_directory(self, path: str) -> bool:
+        """Check if path is a directory."""
+        return self._backend.is_directory(path)
+    
+    def list_directory(self, path: str) -> list[str]:
+        """List directory contents. Raises NotADirectoryError."""
+        return self._backend.list_directory(path)
+    
+    def watch(self, path: str, callback: Callable[[str, object], None]) -> None:
+        """Start watching a file/directory. callback receives (path, event_type)."""
+        if path not in self._monitors:
+            self._monitors[path] = self._backend.monitor(path, callback)
+    
+    def unwatch(self, path: str) -> None:
+        """Stop watching a file/directory."""
+        if path in self._monitors:
+            self._monitors[path].cancel()
+            del self._monitors[path]
+    
+    def get_encoding(self, path: str) -> str:
+        """Return file encoding. Default is utf-8."""
+        return "utf-8"
+```
+
+```python
+# services/git_service.py
+from services.git_repository import GitRepository
+from core.interfaces.vcs_backend import AbstractVCSBackend
+
+class GitService:
+    def __init__(self, repository: GitRepository, event_bus: EventBus) -> None:
+        self._repo = repository
+        self._event_bus = event_bus
+    
+    def get_status(self) -> list[FileStatus]:
+        """Get current git status."""
+        return self._repo.get_status()
+    
+    def stage(self, paths: list[str]) -> None:
+        """Stage files for commit."""
+        for path in paths:
+            self._repo.stage(path)
+        self._event_bus.emit(GitStatusChangedEvent())
+    
+    def unstage(self, paths: list[str]) -> None:
+        """Unstage files."""
+        for path in paths:
+            self._repo.unstage(path)
+        self._event_bus.emit(GitStatusChangedEvent())
+    
+    def commit(self, message: str) -> None:
+        """Commit staged files."""
+        self._repo.commit(message)
+        self._event_bus.emit(GitStatusChangedEvent())
+    
+    def get_diff(self, path: str | None = None, staged: bool = False) -> str:
+        """Get diff for a file or all changes."""
+        return self._repo.get_diff(path, staged)
+    
+    def is_repo(self) -> bool:
+        """Check if current folder is a git repository."""
+        return self._repo.is_repo()
+    
+    def get_current_branch(self) -> str:
+        """Get current branch name."""
+        return self._repo.get_current_branch()
+    
+    def list_branches(self) -> list[BranchInfo]:
+        """List all local branches."""
+        return self._repo.list_branches()
+    
+    def checkout_branch(self, name: str) -> None:
+        """Checkout a branch."""
+        self._repo.checkout_branch(name)
+        self._event_bus.emit(GitStatusChangedEvent())
+```
 
 ```python
 # services/search_service.py
@@ -435,18 +1131,119 @@ class SearchService:
 
 ```python
 # services/config_service.py
+import configparser
+import os
+from pathlib import Path
+
+DEFAULT_CONFIG = {
+    "editor": {
+        "font": "Monospace 13",
+        "tab_width": "4",
+        "insert_spaces": "true",
+        "show_line_numbers": "true",
+        "highlight_current_line": "true",
+        "word_wrap": "false",
+        "auto_indent": "true",
+        "theme_mode": "auto",
+        "light_scheme": "Adwaita",
+        "dark_scheme": "Adwaita-dark",
+        "explicit_scheme": "Adwaita",
+    },
+    "app": {
+        "color_mode": "system",
+        "last_folder": "",
+        "active_panel": "",
+        "side_panel_width": "220",
+        "side_panel_visible": "true",
+        "window_width": "1200",
+        "window_height": "800",
+        "window_maximized": "false",
+    },
+    "plugin.search": {
+        "include_hidden": "false",
+        "last_glob_filter": "",
+    },
+    "plugin.source_control": {
+        "auto_refresh": "true",
+    },
+}
+
 class ConfigService:
-    def load(self) -> None: ...
-    def save(self) -> None: ...
+    def __init__(self, config_path: str | None = None) -> None:
+        """
+        Initialize ConfigService.
+        
+        Args:
+            config_path: Path to config file. Defaults to ~/.config/slate/config.ini
+        """
+        self._config_path = config_path or os.path.join(
+            os.path.expanduser("~"), ".config", "slate", "config.ini"
+        )
+        self._config = configparser.ConfigParser()
+        self._loaded = False
+    
+    def load(self) -> None:
+        """Load config from file. Creates default config if file doesn't exist."""
+        if os.path.exists(self._config_path):
+            self._config.read(self._config_path, encoding="utf-8")
+        else:
+            self._create_default_config()
+        self._loaded = True
+    
+    def _create_default_config(self) -> None:
+        """Create default config and ensure directory exists."""
+        os.makedirs(os.path.dirname(self._config_path), exist_ok=True)
+        for section, values in DEFAULT_CONFIG.items():
+            self._config.add_section(section)
+            for key, value in values.items():
+                self._config.set(section, key, value)
+        self.save()
+    
+    def save(self) -> None:
+        """Save config to file. Creates directory if needed."""
+        os.makedirs(os.path.dirname(self._config_path), exist_ok=True)
+        with open(self._config_path, "w", encoding="utf-8") as f:
+            self._config.write(f)
 
-    def get_editor_settings(self) -> dict: ...
-    def update_editor_settings(self, data: dict) -> None: ...
+    def get_editor_settings(self) -> dict:
+        """Return editor settings as dict."""
+        return dict(self._config.items("editor"))
+    
+    def update_editor_settings(self, data: dict) -> None:
+        """Merge update into editor section."""
+        if not self._config.has_section("editor"):
+            self._config.add_section("editor")
+        for key, value in data.items():
+            self._config.set("editor", key, str(value))
+        self.save()
 
-    def get_app_state(self) -> dict: ...
-    def update_app_state(self, data: dict) -> None: ...
+    def get_app_state(self) -> dict:
+        """Return app state as dict."""
+        return dict(self._config.items("app"))
+    
+    def update_app_state(self, data: dict) -> None:
+        """Merge update into app section."""
+        if not self._config.has_section("app"):
+            self._config.add_section("app")
+        for key, value in data.items():
+            self._config.set("app", key, str(value))
+        self.save()
 
-    def get_plugin_config(self, plugin_id: str) -> dict: ...
-    def update_plugin_config(self, plugin_id: str, data: dict) -> None: ...
+    def get_plugin_config(self, plugin_id: str) -> dict:
+        """Return plugin-specific config as dict."""
+        section = f"plugin.{plugin_id}"
+        if self._config.has_section(section):
+            return dict(self._config.items(section))
+        return {}
+    
+    def update_plugin_config(self, plugin_id: str, data: dict) -> None:
+        """Merge update into plugin section."""
+        section = f"plugin.{plugin_id}"
+        if not self._config.has_section(section):
+            self._config.add_section(section)
+        for key, value in data.items():
+            self._config.set(section, key, str(value))
+        self.save()
 ```
 
 `ConfigService` rules:
@@ -454,6 +1251,7 @@ class ConfigService:
 - returns plain Python dictionaries for v1; no GTK objects and no theme-resolution logic
 - merges partial updates into existing sections instead of replacing unrelated keys
 - is the persistence backend used by `PluginContext.get_config()` / `set_config()`
+- if config file doesn't exist, creates it with `DEFAULT_CONFIG` values on first `load()`
 
 ```python
 # services/theme_service.py
@@ -511,6 +1309,8 @@ class TabManager:
     def save_active_tab_as(self, path: str) -> None: ...
 ```
 
+**Note:** `TabManager` is in the **UI layer** (`ui/editor/tab_manager.py`), not the service layer, because it directly manages GTK widgets (`GtkNotebook`). This is the one exception to the "zero GTK imports" rule for services.
+
 `TabManager` rules:
 - subscribes to `OpenFileRequestedEvent` and `OpenDiffRequestedEvent` on the event bus
 - is the only owner of tab creation, reuse, activation, close behavior, and tab-state bookkeeping
@@ -530,6 +1330,62 @@ class TabQueryService:
 
 `TabManager` must implement `TabQueryService` so plugins can query dirty/open path state without touching GTK widgets.
 
+#### Data Models (core/models.py)
+
+```python
+# core/models.py
+from dataclasses import dataclass
+from enum import Enum, auto
+
+class FileStatusType(Enum):
+    """VCS file status types."""
+    MODIFIED = auto()
+    ADDED = auto()
+    DELETED = auto()
+    UNTRACKED = auto()
+    RENAMED = auto()
+    COPIED = auto()
+    UNMERGED = auto()
+
+@dataclass(frozen=True)
+class FileStatus:
+    """Represents a file's VCS status."""
+    path: str                    # relative path from repo root
+    status: FileStatusType
+    staged: bool = False         # True if in staging area
+    original_path: str | None = None  # for renamed files
+
+@dataclass
+class TabState:
+    """Represents the state of an open editor tab."""
+    id: str                      # unique tab ID (uuid)
+    path: str | None             # file path, None for untitled
+    title: str                   # display title
+    is_dirty: bool = False        # unsaved changes
+    is_readonly: bool = False
+    is_diff: bool = False         # is this a diff tab
+    diff_staged: bool = False    # for diff tabs: staged vs working
+    cursor_line: int = 1
+    cursor_column: int = 1
+    scroll_position: tuple[float, float] = (0.0, 0.0)
+
+@dataclass(frozen=True)
+class SearchResult:
+    """Represents a single search match."""
+    path: str
+    line_number: int
+    line_content: str
+    match_start: int             # character offset of match start
+    match_end: int               # character offset of match end
+    
+@dataclass(frozen=True)
+class BranchInfo:
+    """Represents a git branch."""
+    name: str
+    is_current: bool = False
+    is_remote: bool = False
+```
+
 #### Repository Pattern — git data access
 
 `GitRepository` wraps all `gitpython` calls. Nothing else in the codebase touches `gitpython`:
@@ -537,14 +1393,45 @@ class TabQueryService:
 ```python
 # services/git_repository.py
 class GitRepository:
-    def get_status(self) -> list[FileStatus]: ...
-    def stage(self, path: str) -> None: ...
-    def unstage(self, path: str) -> None: ...
-    def commit(self, message: str) -> None: ...
-    def get_diff(self, path: str, staged: bool) -> str: ...
-    def list_branches(self) -> list[str]: ...
-    def checkout_branch(self, name: str) -> None: ...
-    def get_current_branch(self) -> str: ...
+    def __init__(self, path: str | None = None) -> None:
+        """Initialize with repo root path. None = auto-detect from cwd."""
+        self._path = path
+    
+    def is_repo(self) -> bool:
+        """Check if path is a git repository."""
+        ...
+    
+    def get_status(self) -> list[FileStatus]:
+        """Get current working tree status."""
+        ...
+    
+    def stage(self, paths: list[str]) -> None:
+        """Stage files for commit."""
+        ...
+    
+    def unstage(self, paths: list[str]) -> None:
+        """Unstage files."""
+        ...
+    
+    def commit(self, message: str) -> None:
+        """Commit staged changes."""
+        ...
+    
+    def get_diff(self, path: str | None = None, staged: bool = False) -> str:
+        """Get diff output. If path is None, get all changes."""
+        ...
+    
+    def get_current_branch(self) -> str:
+        """Get current branch name. Raises GitNotARepoError if not in repo."""
+        ...
+    
+    def list_branches(self) -> list[BranchInfo]:
+        """List all local branches."""
+        ...
+    
+    def checkout_branch(self, name: str) -> None:
+        """Checkout a branch. Raises GitOperationError on failure."""
+        ...
 ```
 
 ---
@@ -581,6 +1468,7 @@ slate/
 │   ├── local_file_backend.py            ← ReadableBackend + WritableBackend impl
 │   ├── native_search_backend.py         ← os.walk + mmap (Strategy impl)
 │   └── language_detector.py             ← GtkSource.LanguageManager (Strategy impl)
+│                                           ← Uses lazy import: import GtkSource in methods only
 │
 ├── ui/                                  ← GTK widgets; depends on services + core only
 │   ├── app.py                           ← Adw.Application; composition root; all DI wiring
@@ -689,12 +1577,149 @@ Startup/opening responsibility rules:
 - CLI handling converts a startup folder path into `FolderChangedEvent`
 - `SlateWindow` or top-level actions may trigger requests, but tab creation still flows through `TabManager`
 
+#### Host UI Bridge Implementation
+
+```python
+# ui/plugin_host.py
+from core.plugin_api import HostUIBridge, ActionSpec, PanelSpec, DialogSpec, ActivityBarItem, PanelHeaderAction
+
+class PluginHostBridge(HostUIBridge):
+    """Implementation of HostUIBridge protocol for the main window."""
+    
+    def __init__(self, window: "SlateWindow") -> None:
+        self._window = window
+        self._actions: dict[str, ActionSpec] = {}
+        self._panels: dict[str, PanelSpec] = {}
+        self._activity_items: dict[str, ActivityBarItem] = {}
+        self._dialogs: dict[str, DialogSpec] = {}
+    
+    def register_action(self, spec: ActionSpec) -> None:
+        """Register a Gio.SimpleAction for the plugin."""
+        self._actions[spec.action_name] = spec
+        self._window.register_action(spec)
+    
+    def register_panel(self, panel: PanelSpec, *, activity_item: ActivityBarItem) -> None:
+        """Register a side panel with its activity bar item."""
+        self._panels[panel.plugin_id] = panel
+        self._activity_items[panel.plugin_id] = activity_item
+        self._window.register_panel(panel, activity_item)
+    
+    def register_dialog(self, spec: DialogSpec) -> None:
+        """Register a dialog for the plugin."""
+        self._dialogs[spec.dialog_id] = spec
+        self._window.register_dialog(spec)
+    
+    def set_activity_badge(self, plugin_id: str, badge_text: str | None) -> None:
+        """Update the badge on the activity bar item."""
+        self._window.set_activity_badge(plugin_id, badge_text)
+    
+    def set_panel_header_actions(self, plugin_id: str, actions: list[PanelHeaderAction]) -> None:
+        """Update header actions for a panel."""
+        self._window.set_panel_header_actions(plugin_id, actions)
+    
+    def show_dialog(self, dialog_id: str) -> None:
+        """Show a registered dialog."""
+        if dialog_id in self._dialogs:
+            self._dialogs[dialog_id].presenter(self._window)
+    
+    def activate_panel(self, plugin_id: str) -> None:
+        """Activate a panel by ID."""
+        self._window.activate_panel(plugin_id)
+```
+
+#### Theme Manager Responsibilities
+
+`ThemeManager` (`ui/theme_manager.py`) handles GTK-level theme application, while `ThemeService` (`services/theme_service.py`) owns theme policy. The separation:
+
+- **ThemeService** (service layer):
+  - Persists and reads theme config
+  - Resolves color mode (system/light/dark)
+  - Resolves editor scheme based on mode
+  - Emits `ThemeChangedEvent`
+  
+- **ThemeManager** (UI layer):
+  - Applies CSS providers to widgets
+  - Updates Adw.Application color scheme
+  - Listens to `ThemeChangedEvent` and calls `EditorView.apply_theme()` on all open views
+
+```python
+# ui/theme_manager.py
+class ThemeManager:
+    def __init__(self, theme_service: ThemeService) -> None:
+        self._theme = theme_service
+        self._event_bus = theme_service.get_event_bus()  # Assume this method exists
+    
+    def apply_initial_state(self) -> None:
+        """Apply theme before window is shown."""
+        # Get system dark mode preference
+        settings = Gtk.Settings.get_default()
+        system_is_dark = settings.get_property("gtk-application-prefer-dark-theme")
+        
+        state = self._theme.get_theme_state(system_is_dark=system_is_dark)
+        self._apply_to_app(state)
+    
+    def _apply_to_app(self, state: dict) -> None:
+        """Apply theme state to GTK application."""
+        # Apply Adw color scheme
+        # Apply CSS if needed
+        pass
+```
+
+**Note:** For v1, `ThemeService.get_event_bus()` should be added to allow `ThemeManager` to subscribe to theme changes. This is a minor API addition.
+
 ---
 
 ### 3.7 Error Handling Strategy
 
 - Services raise typed exceptions from `core/exceptions.py`:
-  `SlateFileNotFoundError`, `SlatePermissionError`, `GitNotARepoError`, `GitOperationError`, `GitDirtyWorkingTreeError`, `SearchBackendError`
+
+```python
+# core/exceptions.py
+class SlateError(Exception):
+    """Base exception for all Slate errors."""
+    pass
+
+class SlateFileNotFoundError(SlateError):
+    """Raised when a file is not found."""
+    def __init__(self, path: str) -> None:
+        self.path = path
+        super().__init__(f"File not found: {path}")
+
+class SlatePermissionError(SlateError):
+    """Raised when file access is denied."""
+    def __init__(self, path: str) -> None:
+        self.path = path
+        super().__init__(f"Permission denied: {path}")
+
+class GitNotARepoError(SlateError):
+    """Raised when a folder is not a git repository."""
+    def __init__(self, path: str) -> None:
+        self.path = path
+        super().__init__(f"Not a git repository: {path}")
+
+class GitOperationError(SlateError):
+    """Raised when a git operation fails."""
+    def __init__(self, message: str, details: str | None = None) -> None:
+        self.message = message
+        self.details = details
+        msg = message
+        if details:
+            msg += f" ({details})"
+        super().__init__(msg)
+
+class GitDirtyWorkingTreeError(GitOperationError):
+    """Raised when operation requires clean working tree."""
+    pass
+
+class SearchBackendError(SlateError):
+    """Raised when search operation fails."""
+    pass
+
+class ConfigError(SlateError):
+    """Raised when config is invalid."""
+    pass
+```
+
 - UI layer catches at the boundary → `Adw.AlertDialog`. Services never show UI.
 - Plugins show their own errors inline (e.g. "Not a git repository" label in Source Control panel).
 - Plugin `activate()` calls are wrapped in try/except — a failing plugin is skipped with a stderr log; the app continues.
@@ -718,6 +1743,106 @@ Mandatory test layers:
 - **Integration tests**: open/edit/save flow, search results navigation, git stage/unstage/commit flow, preferences live-update flow, startup restore of config and active panel, CLI startup file/folder opening
 - **Plugin isolation tests**: one failing plugin must not crash startup; plugin actions and contributions remain isolated
 - **UI smoke tests**: main window creation, activity bar population, side panel switching, preferences dialog open, editor tab creation
+
+#### Test Directory Structure
+
+```
+tests/
+├── conftest.py                     ← shared fixtures
+├── core/
+│   ├── __init__.py
+│   ├── test_event_bus.py
+│   ├── test_commands.py
+│   ├── test_models.py
+│   └── test_plugin_api.py
+├── services/
+│   ├── __init__.py
+│   ├── test_file_service.py
+│   ├── test_git_service.py
+│   ├── test_search_service.py
+│   ├── test_config_service.py
+│   └── test_theme_service.py
+├── plugins/
+│   ├── __init__.py
+│   ├── test_plugin_manager.py
+│   └── core/
+│       ├── __init__.py
+│       ├── test_file_explorer.py
+│       ├── test_search.py
+│       └── test_source_control.py
+└── ui/
+    ├── __init__.py
+    └── smoke/
+        ├── __init__.py
+        ├── test_main_window.py
+        └── test_editor.py
+```
+
+#### Common Test Fixtures (conftest.py)
+
+```python
+# tests/conftest.py
+import pytest
+import tempfile
+import os
+import shutil
+from pathlib import Path
+
+@pytest.fixture
+def temp_dir():
+    """Create a temporary directory and clean up after."""
+    tmp = tempfile.mkdtemp()
+    yield tmp
+    shutil.rmtree(tmp)
+
+@pytest.fixture
+def temp_git_repo(temp_dir):
+    """Create a temporary git repository."""
+    os.chdir(temp_dir)
+    os.system("git init")
+    yield temp_dir
+    os.chdir("/")
+
+@pytest.fixture
+def mock_event_bus():
+    """Create an EventBus for testing."""
+    from core.event_bus import EventBus
+    return EventBus()
+
+@pytest.fixture
+def mock_config_service(temp_dir):
+    """Create a ConfigService with temp config path."""
+    from services.config_service import ConfigService
+    config_path = os.path.join(temp_dir, "test_config.ini")
+    return ConfigService(config_path)
+
+@pytest.fixture
+def mock_plugin_context():
+    """Create a mock PluginContext for plugin testing."""
+    from unittest.mock import Mock
+    ctx = Mock()
+    ctx.get_service = Mock(side_effect=KeyError)
+    ctx.get_event_bus.return_value = Mock()
+    ctx.get_config.return_value = {}
+    ctx.get_ui.return_value = Mock()
+    return ctx
+```
+
+#### Running Tests
+
+```bash
+# Run all tests with coverage
+pytest tests/ --cov=slate --cov-report=term-missing
+
+# Run only core and services (no GTK required)
+pytest tests/core tests/services -v
+
+# Run with verbose output
+pytest -vv
+
+# Run specific test file
+pytest tests/services/test_file_service.py -v
+```
 
 Mandatory event/open-flow scenarios:
 - emitting `OpenFileRequestedEvent(path)` creates or focuses exactly one normal editor tab for that file
@@ -798,6 +1923,59 @@ python main.py /path/to/file.py   → opens single file in editor; no sidebar fo
 ```
 
 `main.py` only creates `SlateApplication` and calls `run()`. All wiring is in `ui/app.py`.
+
+#### CLI Argument Handling
+
+```python
+# main.py
+import sys
+from ui.app import SlateApplication
+
+def main():
+    app = SlateApplication()
+    
+    # Store startup path for later processing
+    startup_path = None
+    if len(sys.argv) > 1:
+        startup_path = sys.argv[1]
+    
+    app.set_startup_path(startup_path)
+    app.run()
+
+if __name__ == "__main__":
+    main()
+```
+
+```python
+# ui/app.py - partial
+class SlateApplication(Adw.Application):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._startup_path: str | None = None
+    
+    def set_startup_path(self, path: str | None) -> None:
+        """Store CLI path for processing during activation."""
+        self._startup_path = path
+    
+    def do_activate(self):
+        # ... initialization ...
+        
+        # Process startup path
+        if self._startup_path:
+            if os.path.isdir(self._startup_path):
+                self._event_bus.emit(FolderChangedEvent(path=self._startup_path))
+            elif os.path.isfile(self._startup_path):
+                self._event_bus.emit(OpenFileRequestedEvent(path=self._startup_path))
+        
+        # ... rest of activation ...
+```
+
+Startup path handling rules:
+1. CLI path always wins over persisted `last_folder` from config
+2. If CLI path is a directory: emit `FolderChangedEvent`, show side panel, prefer `file_explorer` as active panel
+3. If CLI path is a file: emit `OpenFileRequestedEvent`, do NOT auto-load `last_folder`
+4. If no CLI path: load `last_folder` from config if it exists
+5. Startup path is processed AFTER config is loaded and BEFORE window is presented
 
 ---
 
