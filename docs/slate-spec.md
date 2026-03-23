@@ -68,43 +68,80 @@ This is the most important architectural decision. **Read carefully.**
 
 #### Plugin Contract
 
+`core/plugin_api.py` must remain pure Python. It defines serializable metadata and opaque factory callbacks, but it does **not** import GTK, Gio, or any `gi` module.
+
 Every plugin implements `AbstractPlugin` from `core/plugin_api.py`:
 
 ```python
 # core/plugin_api.py
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-import gi
-gi.require_version('Gtk', '4.0')
-from gi.repository import Gtk, Gio
+from __future__ import annotations
 
-@dataclass
+from abc import ABC, abstractmethod
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Protocol
+
+UiActionCallback = Callable[[], None]
+WidgetFactory = Callable[[], object]     # host expects a Gtk.Widget at runtime
+DialogPresenter = Callable[[object], None]  # host passes the active Gtk.Window
+
+@dataclass(frozen=True)
 class ActivityBarItem:
     plugin_id: str
     icon_name: str       # XDG symbolic icon e.g. "folder-symbolic"
     tooltip: str
     order: int           # lower = higher in bar
+    supports_badge: bool = False
 
-@dataclass
-class KeyBinding:
-    accelerator: str     # e.g. "<Control><Shift>f"
-    action_name: str     # namespaced: "search.find-in-files"
+@dataclass(frozen=True)
+class PanelHeaderAction:
+    action_id: str
+    icon_name: str
+    tooltip: str
+
+@dataclass(frozen=True)
+class PanelSpec:
+    plugin_id: str
+    title: str
+    widget_factory: WidgetFactory
+    header_actions: list[PanelHeaderAction] = field(default_factory=list)
+
+@dataclass(frozen=True)
+class ActionSpec:
+    action_name: str     # namespaced: "search.focus"
+    callback: UiActionCallback
     label: str
+    accelerator: str | None = None
 
-@dataclass
+@dataclass(frozen=True)
 class MenuItem:
     menu: str            # "file" | "edit" | "view" | "go"
     label: str
     action_name: str
     accelerator: str | None = None
 
+@dataclass(frozen=True)
+class DialogSpec:
+    dialog_id: str
+    presenter: DialogPresenter
+    single_instance: bool = True
+
+class HostUIBridge(Protocol):
+    def register_action(self, spec: ActionSpec) -> None: ...
+    def register_panel(self, panel: PanelSpec, *, activity_item: ActivityBarItem) -> None: ...
+    def register_dialog(self, spec: DialogSpec) -> None: ...
+    def set_activity_badge(self, plugin_id: str, badge_text: str | None) -> None: ...
+    def set_panel_header_actions(self, plugin_id: str, actions: list[PanelHeaderAction]) -> None: ...
+    def show_dialog(self, dialog_id: str) -> None: ...
+    def activate_panel(self, plugin_id: str) -> None: ...
+
 class PluginContext:
-    """The ONLY interface between plugins and the host shell."""
+    """The ONLY host interface available to plugins."""
     def get_service(self, service_id: str) -> object: ...
     def get_event_bus(self) -> "EventBus": ...
     def get_config(self, plugin_id: str) -> dict: ...
     def set_config(self, plugin_id: str, data: dict) -> None: ...
-    def register_action(self, action: Gio.SimpleAction) -> None: ...
+    def get_ui(self) -> HostUIBridge: ...
 
 Service IDs reserved by the host shell:
 - `"file"` → `FileService`
@@ -112,6 +149,7 @@ Service IDs reserved by the host shell:
 - `"search"` → `SearchService`
 - `"config"` → `ConfigService`
 - `"theme"` → `ThemeService`
+- `"tabs"` → `TabQueryService` (read-only tab/document query API exposed by `TabManager`)
 
 class AbstractPlugin(ABC):
     id: str          # unique snake_case e.g. "file_explorer"
@@ -120,29 +158,18 @@ class AbstractPlugin(ABC):
 
     @abstractmethod
     def activate(self, context: PluginContext) -> None:
-        """Wire up services and events. Called once on load."""
+        """
+        Register actions, panels, dialogs, and event subscriptions.
+        Called once during startup after the host UI bridge exists.
+        """
 
     def deactivate(self) -> None:
         """Clean up subscriptions. Called on shutdown or disable."""
-
-    def get_activity_bar_item(self) -> ActivityBarItem | None:
-        """Return metadata for activity bar icon. None = no icon."""
-        return None
-
-    def get_panel_widget(self) -> Gtk.Widget | None:
-        """Widget shown in the side panel when this plugin is active."""
-        return None
-
-    def get_keybindings(self) -> list[KeyBinding]:
-        return []
-
-    def get_menu_items(self) -> list[MenuItem]:
-        return []
 ```
 
 #### PluginManager
 
-`PluginManager` lives in the service layer — it has no GTK imports. It manages lifecycle only.
+`PluginManager` lives in the service layer. It has no GTK imports and manages lifecycle only.
 
 ```python
 # services/plugin_manager.py
@@ -153,7 +180,7 @@ class PluginManager:
     def deactivate_all(self) -> None: ...
     def get_plugin(self, plugin_id: str) -> AbstractPlugin | None: ...
     def get_activity_bar_items(self) -> list[ActivityBarItem]:
-        """Returns sorted items from all registered plugins."""
+        """Returns sorted items registered by plugins during activation."""
 ```
 
 #### Core Plugins (shipped by default)
@@ -170,8 +197,14 @@ All four live in `slate/plugins/core/`. Future plugins drop into `slate/plugins/
 #### Plugin Communication Rules
 - Plugins communicate with each other **only** via the `EventBus` or by fetching a shared service via `context.get_service(id)`.
 - Plugins never hold direct references to other plugin objects.
-- Plugins never import from `slate/ui/`. They return `Gtk.Widget` instances; the shell places them.
+- Plugins never import from `slate/ui/`. They may import GTK directly inside plugin modules, but the host boundary remains `PluginContext` + `HostUIBridge`.
 - Cross-cutting runtime concerns such as theme resolution are **services**, not plugins. User-facing controls for those services may be exposed by plugins (e.g. Preferences), but ownership of policy stays outside the plugin layer.
+
+Plugin registration rules:
+- `activate()` may subscribe to events and register actions/panels/dialogs only. It must not immediately show windows, mutate tab state, or emit startup open events as side effects.
+- Panel widgets and dialogs are created lazily through registered factories/presenters. The host shell owns insertion into the layout, parenting, single-instance behavior, and disposal.
+- `ActivityBarItem.supports_badge = true` means the plugin may later call `context.get_ui().set_activity_badge(plugin_id, text)`.
+- Side-panel header actions are host-owned chrome. Plugins declare them through `PanelSpec.header_actions` and may update them later with `set_panel_header_actions()`.
 
 #### LSP Readiness (required, even though LSP is out of scope for v1)
 - LSP remains a backlog item for v1. Do **not** implement language server management, diagnostics UI, symbol indexing, hover, or completion in the initial release.
@@ -209,11 +242,11 @@ All four live in `slate/plugins/core/`. Future plugins drop into `slate/plugins/
 - `ThemeService` owns theme policy. Preferences remains a control surface, not the theme owner.
 
 #### L — Liskov Substitution
-- All `AbstractPlugin` implementations are valid substitutes: the shell calls `get_panel_widget()` without knowing the concrete type.
+- All `AbstractPlugin` implementations are valid substitutes: the shell activates them through the same `PluginContext` and consumes the same registered panel/action/dialog contributions.
 - All `AbstractFileBackend` implementations raise the same typed exceptions.
 
 #### I — Interface Segregation
-- `AbstractPlugin` methods (`get_panel_widget`, `get_keybindings`, `get_menu_items`) default to no-ops. A plugin contributing only a menu item does not implement panel methods.
+- A plugin may register only the contribution types it needs. For example, `PreferencesPlugin` registers an action + dialog and no side panel; `FileExplorerPlugin` registers a panel + actions.
 - `AbstractFileBackend` is split into `ReadableBackend` and `WritableBackend`. Read-only backends implement only `ReadableBackend`.
 
 #### D — Dependency Inversion
@@ -266,7 +299,7 @@ class GitStatusChangedEvent:
 
 @dataclass
 class SearchResultsReadyEvent:
-    query: str
+    query: "SearchQuery"
     results: list["SearchResult"]
 
 @dataclass
@@ -285,9 +318,13 @@ Event ownership rules:
 - services emit state/result events (`FileSavedEvent`, `SearchResultsReadyEvent`, `GitStatusChangedEvent`) but do not create or focus tabs
 - plugins may subscribe to result events and request navigation, but they must not emit `FileOpenedEvent` directly
 
-#### Command Pattern — actions & undo/redo
+#### Command Pattern — app-level commands and undo/redo
 
-Every mutating user action is a `Command` object with `execute()` and optionally `undo()`.
+Slate has two distinct undo systems and they must not be conflated:
+- text editing undo/redo is owned by each `GtkSource.Buffer`
+- `CommandHistory` is only for app-level operations outside the editor buffer, such as stage/unstage and future refactor actions
+
+Every app-level mutating action is a `Command` object with `execute()` and optionally `undo()`.
 
 ```python
 # core/commands.py
@@ -306,7 +343,11 @@ class StageFileCommand(AbstractCommand):
     def undo(self): self.git_service.unstage(self.path)
 ```
 
-`Ctrl+Z` / `Ctrl+Y` pop a `CommandHistory` stack. Adding a new action = new `Command` subclass only.
+Keyboard routing rules:
+- when the active editor buffer has focus, `Ctrl+Z` / `Ctrl+Y` invoke buffer-local undo/redo
+- when no editor buffer is focused, `Ctrl+Z` / `Ctrl+Y` target `CommandHistory`
+- `SaveFileCommand` is executable but not undoable in v1
+- Replace All in files is implemented as a service operation with a confirmation step; it does not participate in `CommandHistory` in v1
 
 #### Factory Pattern — editor tab construction
 
@@ -350,6 +391,47 @@ GTK/libadwaita runtime application stays in the UI layer via a small helper such
 #### Minimal Service APIs (implementation contract)
 
 The following APIs are the minimum required public surface for v1. Implementers may add private helpers, but they must not bypass these ownership boundaries.
+
+```python
+# services/search_service.py
+from dataclasses import dataclass, field
+
+@dataclass(frozen=True)
+class SearchQuery:
+    text: str
+    folder: str
+    glob: str | None = None
+    match_case: bool = False
+    whole_word: bool = False
+    regex: bool = False
+    include_hidden: bool = False
+
+@dataclass(frozen=True)
+class ReplaceRequest:
+    query: SearchQuery
+    replacement: str
+    target_paths: list[str] | None = None
+    dirty_paths: set[str] = field(default_factory=set)
+
+@dataclass(frozen=True)
+class ReplaceSummary:
+    files_changed: int
+    replacements_made: int
+    skipped_dirty_paths: list[str]
+    failed_paths: list[str]
+
+class SearchService:
+    def search(self, query: SearchQuery) -> None: ...
+    def replace_all(self, request: ReplaceRequest) -> ReplaceSummary: ...
+```
+
+`SearchService` rules:
+- `search()` runs asynchronously and emits `SearchResultsReadyEvent(query=<full SearchQuery>, results=...)`
+- `replace_all()` is synchronous from the caller's perspective and returns a structured `ReplaceSummary`
+- replace operations modify on-disk files only; they never mutate editor widgets directly
+- `dirty_paths` must be skipped rather than overwritten silently
+- unreadable/binary/failed files are skipped and returned in `failed_paths`; partial success is allowed and must be surfaced to the user
+- if `target_paths` is `None`, replace applies to the current full result set for `query`
 
 ```python
 # services/config_service.py
@@ -410,6 +492,7 @@ class ThemeService:
 class TabManager:
     def __init__(self, factory, file_service, event_bus): ...
 
+    def new_tab(self) -> None: ...
     def open_file(
         self,
         path: str,
@@ -422,6 +505,7 @@ class TabManager:
     def open_diff(self, path: str, *, staged: bool) -> None: ...
     def get_active_tab(self) -> "TabState | None": ...
     def get_open_tabs(self) -> list["TabState"]: ...
+    def get_dirty_paths(self) -> set[str]: ...
     def close_tab(self, tab_id: str) -> bool: ...
     def save_active_tab(self) -> None: ...
     def save_active_tab_as(self, path: str) -> None: ...
@@ -430,10 +514,21 @@ class TabManager:
 `TabManager` rules:
 - subscribes to `OpenFileRequestedEvent` and `OpenDiffRequestedEvent` on the event bus
 - is the only owner of tab creation, reuse, activation, close behavior, and tab-state bookkeeping
+- owns untitled-tab creation for `Ctrl+T`; untitled tabs have no path until the first successful Save As
 - reuses an existing normal file tab for the same path; diff tabs are tracked separately and are not reused as normal file tabs
 - emits `FileOpenedEvent` only after a file tab becomes active
 - owns cursor placement and scroll positioning for line/column navigation after open
 - never reads config directly; window/sidebar/session restore remains outside `TabManager`
+
+```python
+# services/tab_query_service.py
+class TabQueryService:
+    def get_open_tabs(self) -> list["TabState"]: ...
+    def get_dirty_paths(self) -> set[str]: ...
+    def is_path_dirty(self, path: str) -> bool: ...
+```
+
+`TabManager` must implement `TabQueryService` so plugins can query dirty/open path state without touching GTK widgets.
 
 #### Repository Pattern — git data access
 
@@ -462,7 +557,7 @@ slate/
 ├── requirements.txt
 │
 ├── core/                                ← pure Python; zero GTK; zero I/O
-│   ├── plugin_api.py                    ← AbstractPlugin, PluginContext, ActivityBarItem, KeyBinding
+│   ├── plugin_api.py                    ← AbstractPlugin, PluginContext, ActionSpec, PanelSpec
 │   ├── events.py                        ← all typed event dataclasses
 │   ├── event_bus.py                     ← EventBus implementation
 │   ├── commands.py                      ← AbstractCommand, CommandHistory
@@ -480,6 +575,7 @@ slate/
 │   ├── git_service.py                   ← git orchestration; emits GitStatusChanged
 │   ├── git_repository.py                ← gitpython wrapper (Repository pattern)
 │   ├── search_service.py                ← search orchestration; emits SearchResultsReady
+│   ├── tab_query_service.py             ← read-only tab/document query interface
 │   ├── config_service.py                ← reads/writes config.ini
 │   ├── theme_service.py                 ← theme policy + scheme resolution
 │   ├── local_file_backend.py            ← ReadableBackend + WritableBackend impl
@@ -490,6 +586,7 @@ slate/
 │   ├── app.py                           ← Adw.Application; composition root; all DI wiring
 │   ├── theme_manager.py                 ← applies ThemeService state to Adw/Gtk CSS providers
 │   ├── window.py                        ← SlateWindow; layout skeleton only
+│   ├── plugin_host.py                   ← HostUIBridge implementation for panels/actions/dialogs
 │   ├── activity_bar.py                  ← vertical icon strip widget
 │   ├── side_panel.py                    ← Gtk.Stack that swaps plugin panel widgets
 │   ├── editor/
@@ -539,13 +636,27 @@ class SlateApplication(Adw.Application):
         search_svc   = SearchService(NativeSearchBackend(), event_bus)
         theme_svc    = ThemeService(config, event_bus)
 
-        # Plugin context (service registry + bus + config)
+        # UI skeleton + host bridge
+        theme_mgr = ThemeManager(theme_svc)
+        theme_mgr.apply_initial_state()
+        factory  = EditorViewFactory(config, theme_svc, lang_det)
+        tab_mgr  = TabManager(factory, file_svc, event_bus)
+
+        window = SlateWindow(
+            application=self,
+            tab_manager=tab_mgr,
+            config=config,
+            event_bus=event_bus,
+        )
+        host_ui = PluginHostBridge(window)
+
+        # Plugin context (service registry + bus + config + host UI)
         service_registry = {
             "file": file_svc, "git": git_svc,
             "search": search_svc, "config": config,
-            "theme": theme_svc,
+            "theme": theme_svc, "tabs": tab_mgr,
         }
-        plugin_ctx = PluginContext(service_registry, event_bus, config)
+        plugin_ctx = PluginContext(service_registry, event_bus, config, host_ui)
 
         # Plugin manager
         plugin_mgr = PluginManager(plugin_ctx)
@@ -554,20 +665,9 @@ class SlateApplication(Adw.Application):
         plugin_mgr.register(SourceControlPlugin())
         plugin_mgr.register(PreferencesPlugin())
         plugin_mgr.activate_all()
+        window.attach_plugin_manager(plugin_mgr)
+        window.attach_plugin_host(host_ui)
 
-        # UI
-        theme_mgr = ThemeManager(theme_svc)
-        theme_mgr.apply_initial_state()
-        factory  = EditorViewFactory(config, theme_svc, lang_det)
-        tab_mgr  = TabManager(factory, file_svc, event_bus)
-
-        window = SlateWindow(
-            application=self,
-            plugin_manager=plugin_mgr,
-            tab_manager=tab_mgr,
-            config=config,
-            event_bus=event_bus,
-        )
         window.restore_window_state()
         window.restore_sidebar_state()
         window.restore_startup_context()   # folder/file from argv or persisted app state
@@ -577,8 +677,8 @@ class SlateApplication(Adw.Application):
 Startup order requirements:
 1. load config
 2. create `ThemeService` and apply initial theme state before presenting any window
-3. activate plugins and register actions
-4. create window and editor infrastructure
+3. create window/editor infrastructure and `HostUIBridge`
+4. activate plugins and let them register actions/panels/dialogs against the host bridge
 5. restore window geometry/sidebar state
 6. resolve startup context from CLI args first, otherwise persisted app state
 7. only restore `last_folder` when no CLI file/folder argument is provided
@@ -646,11 +746,12 @@ def test_stage_file():
     assert "src/main.py" in mock_repo.staged_files
 
 def test_plugin_registers_activity_bar_item():
-    ctx = MockPluginContext()
+    host_ui = MockHostUIBridge()
+    ctx = MockPluginContext(ui=host_ui)
     pm = PluginManager(ctx)
     pm.register(FileExplorerPlugin())
     pm.activate_all()
-    assert any(i.plugin_id == "file_explorer" for i in pm.get_activity_bar_items())
+    assert any(i.plugin_id == "file_explorer" for i in host_ui.activity_items)
 ```
 
 No GTK initialisation required for any service, core, or plugin-logic test.
@@ -733,13 +834,14 @@ Bar       (220px default,
 - Clicking an icon: activates that panel, OR collapses the side panel if already active
 - Active icon: 2px left-edge accent bar (CSS class `active-panel-indicator`)
 - `ActivityBar` receives `list[ActivityBarItem]` from `PluginManager` — has no knowledge of concrete plugins
+- Numeric badges are rendered only for items with `supports_badge = true`; badge state is pushed by the host bridge
 - Emits `ActivePanelChangedEvent` on the event bus when the user switches panels
 
 ### 6.3 Side Panel (`ui/side_panel.py`)
 
-- `Gtk.Stack` that swaps in plugin `get_panel_widget()` returns
+- `Gtk.Stack` that swaps in registered plugin panel widgets created from `PanelSpec.widget_factory`
 - Width: 220px default; resizable via `Gtk.Paned`; minimum 150px
-- Panel header bar: plugin name label + optional action buttons (plugin-provided)
+- Panel header bar: plugin name label + optional action buttons from `PanelSpec.header_actions`
 - Collapsible: clicking the active activity bar button again hides the panel (`Ctrl+B` toggles)
 - Persists width and last active `plugin_id` across sessions
 - On startup, restored `active_panel` is used only if `side_panel_visible = true`; otherwise the panel stays collapsed
@@ -807,6 +909,13 @@ Opening behavior:
 - Replace `Gtk.Entry` appears below search
 - Replace · Replace All (with confirmation)
 
+Replace semantics for v1:
+- replace operations act on files on disk, not directly on editor widgets
+- before `Replace All`, the plugin queries `TabQueryService.get_dirty_paths()` and passes those paths into `SearchService.replace_all()`
+- dirty open files are skipped and shown in the completion summary instead of being overwritten
+- `Replace All` applies only to the current confirmed search query/options/folder/glob combination; changing the query invalidates the old result set
+- after successful replacements, any currently open clean tab for a changed file must be reloaded or refreshed through the existing file-monitor/reload path
+
 #### Backend
 - `SearchService` → `NativeSearchBackend` (Python `os.walk` + `mmap`)
 - Runs on a `GLib.ThreadPool` thread — UI stays responsive
@@ -853,6 +962,7 @@ Shows "Not a git repository" if the open folder has no `.git`.
 - Subscribes to `FileSavedEvent` → refreshes status
 - `Gio.FileMonitor` on `.git/index` for instant badge update on external git ops
 - Manual ↻ refresh button in panel header
+- After every refresh, the plugin updates its activity badge through `context.get_ui().set_activity_badge("source_control", "<count>")`; `None` hides the badge
 
 **Keybinding contributed:** `Ctrl+Shift+G` → focus source control panel  
 **Events subscribed:** `FileSavedEvent`, `FolderChangedEvent`, `GitStatusChangedEvent`  
@@ -866,6 +976,13 @@ Shows "Not a git repository" if the open folder has no `.git`.
 Triggered by header bar ⚙ or `Ctrl+,`
 
 This plugin is a **control surface** only. It does not own theme policy. Theme behavior is owned by `ThemeService`.
+
+Registration contract:
+- the plugin registers a dialog contribution with `dialog_id = "preferences.window"`
+- the plugin registers an action `preferences.open`
+- the header-bar ⚙ button and `Ctrl+,` both invoke `preferences.open`
+- `preferences.open` calls `context.get_ui().show_dialog("preferences.window")`
+- the host enforces single-instance presentation of the preferences window for the active main window
 
 `Adw.PreferencesWindow` with two pages:
 
@@ -908,6 +1025,7 @@ Theme rules:
 - Middle-click or × to close; dirty guard: `Adw.AlertDialog` (Save / Discard / Cancel)
 - File changed on disk: `Gio.FileMonitor` triggers "Reload?" dialog on focus-in
 - `Ctrl+B` collapses/restores side panel
+- `Ctrl+T` creates a new untitled tab; first save must route through Save As
 - `TabManager` is the only owner of open-tab state; plugins and services request file opens through services/events, not by touching notebook widgets directly
 - `EditorView` must separate editor-setting updates from theme updates so theme changes do not overwrite unrelated editor preferences
 
@@ -952,9 +1070,10 @@ Open flow contract:
 | `Ctrl+Z` | Undo |
 | `Ctrl+Y` | Redo |
 
-All shortcuts registered as `Gio.SimpleAction` in `ui/actions.py`. Plugins add their own via `PluginContext.register_action()`.
+All shortcuts registered as `Gio.SimpleAction` in `ui/actions.py`. Plugins add their own via `context.get_ui().register_action()`.
 
 `Ctrl+O` opens a file chooser and emits `OpenFileRequestedEvent` for the selected file. It does not bypass `TabManager`.
+`Ctrl+Z` / `Ctrl+Y` target the active `GtkSource.Buffer` when an editor has focus; otherwise they target app-level `CommandHistory`.
 
 ---
 
