@@ -21,7 +21,7 @@ The editor is built on a **first-class plugin system from day one**. Core featur
 - Plugin system from day one — core features ARE plugins
 - Ship four core plugins: File Explorer, Search, Source Control (Git), Preferences
 - Syntax highlighting for common languages via GtkSourceView (zero extra deps)
-- Leverage Python's native Linux integration: GIO, inotify via GLib, gitpython, os/mmap for search
+- Leverage Python's native Linux integration: GIO, inotify via GLib, gitpython, ripgrep for search
 - Maintain strong automated test coverage for core workflows and plugin isolation
 
 ### Non-Goals (v1)
@@ -431,7 +431,7 @@ Plugin registration rules:
 - New panels: implement `AbstractPlugin` — zero changes to `ActivityBar` or `SidePanel`.
 - `FileService` targets `AbstractFileBackend`. SSH backend = new file, no surgery.
 - `GitService` targets `AbstractVCSBackend`. Mercurial = new backend only.
-- `SearchService` targets `AbstractSearchBackend`. Swap `os.walk` for ripgrep = new class only.
+- `SearchService` targets `AbstractSearchBackend`. Search implementation uses ripgrep subprocess.
 - `ThemeService` owns theme policy. Preferences remains a control surface, not the theme owner.
 
 #### L — Liskov Substitution
@@ -728,7 +728,7 @@ class EditorView(GtkSource.View):
 #### Strategy Pattern — search and language backends
 
 - `AbstractSearchBackend.search(query, folder) -> list[SearchResult]`  
-  Default: `NativeSearchBackend` using `os.walk` + `mmap`. Future: ripgrep subprocess.
+  Implementation: `RipgrepSearchBackend` using ripgrep subprocess.
 - `AbstractLanguageDetector.detect(path) -> GtkSource.Language | None`  
   Default: `GtkSource.LanguageManager`. Future: tree-sitter.
 
@@ -851,125 +851,116 @@ class LocalFileBackend(WritableBackend):
 ```
 
 ```python
-# services/native_search_backend.py
-import os
+# services/ripgrep_search_backend.py
+import subprocess
 import re
-import mmap
 from core.interfaces.search_backend import AbstractSearchBackend
 from core.models import SearchResult, SearchQuery, ReplaceSummary
 
-class NativeSearchBackend(AbstractSearchBackend):
-    """Native search using os.walk and mmap."""
-    
-    _BINARY_EXTENSIONS = {
-        ".pyc", ".pyo", ".so", ".o", ".a", ".lib",
-        ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".ico",
-        ".pdf", ".zip", ".tar", ".gz", ".rar", ".7z",
-        ".exe", ".dll", ".so", ".dylib",
-    }
+class RipgrepSearchBackend(AbstractSearchBackend):
+    """Search backend using ripgrep subprocess for high performance."""
     
     def search(self, query: SearchQuery, folder: str, callback) -> None:
         """Search folder for matches. Results delivered via callback."""
-        results = []
-        
-        pattern = self._build_pattern(query)
-        
-        for root, dirs, files in os.walk(folder):
-            # Skip hidden directories unless requested
-            if not query.include_hidden:
-                dirs[:] = [d for d in dirs if not d.startswith(".")]
-                files = [f for f in files if not f.startswith(".")]
-            
-            for filename in files:
-                path = os.path.join(root, filename)
-                if self._should_skip(path, query):
-                    continue
-                
-                try:
-                    matches = self._search_file(path, pattern, query)
-                    results.extend(matches)
-                except (OSError, PermissionError):
-                    continue
+        cmd = self._build_command(query, folder)
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            results = self._parse_output(result.stdout)
+        except (subprocess.TimeoutExpired, OSError):
+            results = []
         
         callback(results)
     
-    def _build_pattern(self, query: SearchQuery) -> re.Pattern:
-        """Build regex pattern from search query."""
-        flags = 0 if query.match_case else re.IGNORECASE
+    def _build_command(self, query: SearchQuery, folder: str) -> list[str]:
+        """Build ripgrep command from search query."""
+        cmd = ["rg", "--json", "-l", query.text, folder]
         
-        if query.regex:
-            return re.compile(query.text, flags)
-        
-        # Escape special regex chars for literal search
-        escaped = re.escape(query.text)
+        if query.match_case:
+            cmd.append("--case-sensitive")
+        else:
+            cmd.append("--ignore-case")
         
         if query.whole_word:
-            escaped = r"\b" + escaped + r"\b"
+            cmd.append("--word-regexp")
         
-        return re.compile(escaped, flags)
+        if query.regex:
+            cmd.append("--regex")
+        
+        if not query.include_hidden:
+            cmd.append("--hidden")
+        
+        if query.glob:
+            cmd.extend(["--glob", query.glob])
+        
+        return cmd
     
-    def _search_file(self, path: str, pattern: re.Pattern, query: SearchQuery) -> list[SearchResult]:
-        """Search a single file for pattern matches."""
-        if query.glob and not self._matches_glob(os.path.basename(path), query.glob):
-            return []
-        
+    def _parse_output(self, output: str) -> list[SearchResult]:
+        """Parse ripgrep JSON output into SearchResult objects."""
         results = []
-        
-        # Skip binary files
-        if os.path.splitext(path)[1].lower() in self._BINARY_EXTENSIONS:
-            return []
-        
-        try:
-            with open(path, "rb") as f:
-                with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-                    text = mm.decode("utf-8", errors="ignore")
-                    for line_num, line in enumerate(text.splitlines(), 1):
-                        match = pattern.search(line)
-                        if match:
-                            results.append(SearchResult(
-                                path=path,
-                                line_number=line_num,
-                                line_content=line,
-                                match_start=match.start(),
-                                match_end=match.end(),
-                            ))
-        except (ValueError, OSError):
-            pass
-        
+        for line in output.strip().split("\n"):
+            if not line:
+                continue
+            try:
+                import json
+                entry = json.loads(line)
+                if entry.get("type") == "match":
+                    data = entry["data"]
+                    results.append(SearchResult(
+                        path=data["path"]["text"],
+                        line_number=data["line_number"],
+                        line_content=data["lines"]["text"].rstrip("\n"),
+                        match_start=data["submatches"][0]["start"],
+                        match_end=data["submatches"][0]["end"],
+                    ))
+            except (json.JSONDecodeError, KeyError, IndexError):
+                continue
         return results
     
-    def _should_skip(self, path: str, query: SearchQuery) -> bool:
-        """Check if file should be skipped."""
-        if not query.include_hidden:
-            basename = os.path.basename(path)
-            if basename.startswith("."):
-                return True
-        
-        # Skip common non-text directories
-        parts = path.split(os.sep)
-        skip_dirs = {".git", "__pycache__", "node_modules", ".venv", "venv"}
-        if any(p in skip_dirs for p in parts):
-            return True
-        
-        return False
-    
-    def _matches_glob(self, filename: str, glob_pattern: str) -> bool:
-        """Simple glob matching."""
-        import fnmatch
-        return fnmatch.fnmatch(filename, glob_pattern)
-    
     def replace_in_files(self, query: SearchQuery, replacement: str, target_paths: list[str] | None) -> ReplaceSummary:
-        """Replace matches in files."""
-        # Implementation would search and replace in target_paths
-        # Returns ReplaceSummary with counts and any failures
-        return ReplaceSummary(
-            files_changed=0,
-            replacements_made=0,
-            skipped_dirty_paths=[],
-            failed_paths=[],
-        )
-
-Swap either = new class only. Zero changes to callers.
+        """Replace matches in files using ripgrep."""
+        cmd = ["rg", "--replace", replacement, query.text]
+        
+        if not query.match_case:
+            cmd.append("--ignore-case")
+        
+        if query.whole_word:
+            cmd.append("--word-regexp")
+        
+        if query.include_hidden:
+            cmd.append("--hidden")
+        
+        if query.glob:
+            cmd.extend(["--glob", query.glob])
+        
+        if target_paths:
+            cmd.extend(target_paths)
+        else:
+            cmd.append(query.folder)
+        
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            files_changed = len(set(
+                json.loads(line)["data"]["path"]["text"]
+                for line in result.stdout.strip().split("\n") if line
+            ))
+            return ReplaceSummary(
+                files_changed=files_changed,
+                replacements_made=result.stdout.count("\n"),
+                skipped_dirty_paths=[],
+                failed_paths=[],
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            return ReplaceSummary(
+                files_changed=0,
+                replacements_made=0,
+                skipped_dirty_paths=[],
+                failed_paths=[query.folder],
+            )
 
 #### Service Pattern — central theme resolution
 
@@ -1466,7 +1457,7 @@ slate/
 │   ├── config_service.py                ← reads/writes config.ini
 │   ├── theme_service.py                 ← theme policy + scheme resolution
 │   ├── local_file_backend.py            ← ReadableBackend + WritableBackend impl
-│   ├── native_search_backend.py         ← os.walk + mmap (Strategy impl)
+│   ├── ripgrep_search_backend.py        ← ripgrep subprocess (Strategy impl)
 │   └── language_detector.py             ← GtkSource.LanguageManager (Strategy impl)
 │                                           ← Uses lazy import: import GtkSource in methods only
 │
@@ -1521,7 +1512,7 @@ class SlateApplication(Adw.Application):
         lang_det     = GtkSourceLanguageDetector()
         git_repo     = GitRepository()
         git_svc      = GitService(git_repo, event_bus)
-        search_svc   = SearchService(NativeSearchBackend(), event_bus)
+        search_svc   = SearchService(RipgrepSearchBackend(), event_bus)
         theme_svc    = ThemeService(config, event_bus)
 
         # UI skeleton + host bridge
@@ -1897,13 +1888,14 @@ For file-opening tests, use event-bus-driven fixtures rather than calling notebo
 | Syntax Highlighting | GtkSourceView 5 (`gi.repository.GtkSource`) | GTK-native; zero extra deps |
 | File Watching | `Gio.FileMonitor` | Native inotify; no polling |
 | Git | `gitpython` (PyPI) + system `git` binary | Pythonic; leverages installed git |
-| In-project Search | Python `os.walk` + `mmap` (stdlib) | Native; zero deps; fast on Linux |
+| In-project Search | ripgrep subprocess (system binary) | High performance; git-aware; cross-platform |
 | Config | Python `configparser` | Standard library; zero deps |
 
 ### System Dependencies (apt)
 ```
 python3  python3-gi  python3-gi-cairo
 gir1.2-gtk-4.0  gir1.2-gtksource-5  gir1.2-adw-1
+ripgrep  git
 ```
 
 ### Python Dependencies (requirements.txt)
@@ -1917,12 +1909,41 @@ PyGObject>=3.44
 ## 5. Entry Point
 
 ```
-python main.py                    → blank window; restores last folder if configured
-python main.py /path/to/folder    → loads folder in file explorer panel
-python main.py /path/to/file.py   → opens single file in editor; no sidebar folder
+slate                            → blank window; restores last folder if configured
+slate .                          → loads current folder in file explorer panel
+slate /path/to/folder           → loads folder in file explorer panel
+slate /path/to/file.py          → opens single file in editor; no sidebar folder
 ```
 
 `main.py` only creates `SlateApplication` and calls `run()`. All wiring is in `ui/app.py`.
+
+#### CLI Launcher Script
+
+Create a launcher script at `slate` (in project root or installed to PATH):
+
+```bash
+#!/bin/bash
+# Slate launcher script
+# Usage: slate [path]
+#   - No args: open blank window, restore last folder
+#   - slate .   : open current directory
+#   - slate <path> : open specified file or folder
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+python3 "$SCRIPT_DIR/main.py" "$@"
+```
+
+Make executable: `chmod +x slate`
+
+For system-wide installation:
+```bash
+sudo cp slate /usr/local/bin/
+```
+
+Or add project bin to PATH in `~/.bashrc`:
+```bash
+export PATH="$PATH:/path/to/slate-project"
+```
 
 #### CLI Argument Handling
 
@@ -2095,7 +2116,7 @@ Replace semantics for v1:
 - after successful replacements, any currently open clean tab for a changed file must be reloaded or refreshed through the existing file-monitor/reload path
 
 #### Backend
-- `SearchService` → `NativeSearchBackend` (Python `os.walk` + `mmap`)
+- `SearchService` → `RipgrepSearchBackend` (ripgrep subprocess)
 - Runs on a `GLib.ThreadPool` thread — UI stays responsive
 - Emits `SearchResultsReadyEvent`; panel subscribes and renders
 
