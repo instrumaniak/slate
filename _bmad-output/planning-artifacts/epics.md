@@ -1,9 +1,10 @@
 ---
-stepsCompleted: [step-01-validate-prerequisites, step-02-design-epics, step-03-create-stories, step-04-final-validation]
+stepsCompleted: [step-01-validate-prerequisites, step-02-design-epics]
 inputDocuments:
   - "prd.md"
   - "architecture.md"
   - "ux-design-specification.md"
+  - "docs/slate-spec.md"
 ---
 
 # Slate - Epic Breakdown
@@ -11,6 +12,8 @@ inputDocuments:
 ## Overview
 
 This document provides the complete epic and story breakdown for Slate, decomposing the requirements from the PRD, UX Design Specification, and Architecture into implementable stories.
+
+**Sprint Change Applied:** 2026-03-25 — Technical stories converted to enablers, oversized stories split, new Epic 7 added for NFR validation.
 
 ## Requirements Inventory
 
@@ -136,6 +139,20 @@ FR-026: Epic 5 - Theme & Preferences (font/tab/indent config)
 FR-027: Epic 5 - Theme & Preferences (display toggles)
 FR-028: Epic 5 - Theme & Preferences (config persistence)
 
+### NFR Coverage Map
+
+NFR-001: Epic 7 - Performance Validation - Startup Time
+NFR-002: Epic 7 - Performance Validation - Runtime Responsiveness
+NFR-003: Epic 7 - Performance Validation - Startup Time
+NFR-004: Epic 7 - Quality Validation - Crash Resistance
+NFR-005: Epic 7 - Performance Validation - Runtime Responsiveness
+NFR-006: Epic 1 - Enabler 1.9 (Development Tooling & CI)
+NFR-007: Epic 1 - Enabler 1.9 (Development Tooling & CI)
+NFR-008: Epic 5 - Theme & Preferences
+NFR-009: Epic 1 - Story 1.5 (FileService GIO monitoring)
+NFR-010: Epic 6 - Plugin Extensibility
+NFR-011: Epic 6 - Story 6.1 (Plugin Developer Experience)
+
 ## Epic List
 
 ### Epic 1: Editor Core & Project Startup
@@ -162,17 +179,20 @@ Users can customize editor appearance, font, display options, and theme mode wit
 Users and developers can extend Slate with custom plugins using the public API — register panels, actions, keybindings, and dialogs without touching core code.
 **FRs covered:** FR-017, FR-018, FR-019, FR-020, FR-021, FR-022
 
+### Epic 7: Performance & Quality Validation
+All non-functional requirements are explicitly validated through automated tests and manual verification — startup time, responsiveness, crash resistance, and accessibility.
+**NFRs covered:** NFR-001, NFR-002, NFR-003, NFR-004, NFR-005
+
 ---
 
 ## Epic 1: Editor Core & Project Startup
 
 Users can launch Slate from the CLI, open files and folders, edit with syntax highlighting, manage tabs, and save — the complete foundation for all other features.
 
-### Story 1.1: Project Initialization & Packaging
+### Enabler 1.1: Project Initialization & Packaging
 
-As a developer,
-I want a properly structured Python project with pyproject.toml and directory layout,
-So that I have a clean foundation to build all layers on top of.
+**Type:** Enabler (supports Story 1.6)
+**Goal:** Establish a properly structured Python project with pyproject.toml and directory layout as foundation for the core editor.
 
 **Acceptance Criteria:**
 
@@ -183,11 +203,10 @@ So that I have a clean foundation to build all layers on top of.
 **And** dev dependencies include pytest, pytest-cov, ruff, mypy
 **And** `python -m slate` runs without import errors (prints version or placeholder)
 
-### Story 1.2: Core Layer — Models, Events & EventBus
+### Enabler 1.2: Core Layer — Models, Events & EventBus
 
-As a developer,
-I want data models, event definitions, and a pub/sub EventBus in slate/core/,
-So that all layers share consistent data structures and communicate without coupling.
+**Type:** Enabler (supports Story 1.6)
+**Goal:** Build the pure Python core layer with data models, events, and pub/sub EventBus — zero GTK, zero I/O.
 
 **Acceptance Criteria:**
 
@@ -199,11 +218,10 @@ So that all layers share consistent data structures and communicate without coup
 **And** all core modules import zero GTK packages
 **And** tests in tests/core/ achieve 90%+ coverage
 
-### Story 1.3: Plugin API Contracts & PluginManager
+### Enabler 1.3: Plugin API Contracts & PluginManager
 
-As a developer,
-I want AbstractPlugin, PluginContext, HostUIBridge, and a PluginManager,
-So that all plugins (built-in and custom) have a consistent extension interface and lifecycle.
+**Type:** Enabler (supports Story 1.6)
+**Goal:** Define the plugin extension interface (AbstractPlugin, PluginContext, HostUIBridge) and lifecycle manager.
 
 **Acceptance Criteria:**
 
@@ -267,7 +285,7 @@ So that I can open, edit, and save files with syntax highlighting.
 
 **Acceptance Criteria:**
 
-**Given** the main window is implemented
+**Given** enablers 1.1, 1.2, 1.3, and 1.9 are complete
 **When** I run `slate /path/to/file` the file opens with syntax highlighting
 **And** syntax highlighting works for: Python, JavaScript, TypeScript, Rust, HTML, CSS, JSON, Markdown, Shell, Go, Java
 **And** the window uses GTK4/Adwaita with system theme inheritance
@@ -311,13 +329,12 @@ So that I can open projects and files instantly.
 **And** CLI path always wins over persisted last_folder
 **And** Python version is checked with clear error if <3.10
 **And** missing GTK4 packages show clear error with apt install command
-**And** startup sequence follows PRD: config → theme → window → plugins → restore → resolve CLI → present
+**And** startup sequence follows PRD: config -> theme -> window -> plugins -> restore -> resolve CLI -> present
 
-### Story 1.9: Development Tooling & CI
+### Enabler 1.9: Development Tooling & CI
 
-As a developer,
-I want linting, type checking, testing, and CI configured,
-So that code quality is enforced from the first commit.
+**Type:** Enabler (supports Story 1.6)
+**Goal:** Configure linting, type checking, testing, and CI so code quality is enforced from the first commit.
 
 **Acceptance Criteria:**
 
@@ -336,7 +353,7 @@ So that code quality is enforced from the first commit.
 
 Users can browse their project in a folder tree, navigate directories, and create/rename/delete files — no more switching to the file manager.
 
-### Story 2.1: File Explorer Plugin
+### Story 2.1: File Explorer — Basic Tree View & Navigation
 
 As a user,
 I want a file tree showing my project structure,
@@ -348,13 +365,41 @@ So that I can browse and open files without leaving the editor.
 **When** I activate the Explorer panel, a tree view shows the loaded folder
 **And** folders expand/collapse with lazy loading (no full tree scan)
 **And** clicking a file opens it in a new tab via OpenFileRequestedEvent
-**And** right-click shows context menu with Create File, Create Folder, Rename, Delete
-**And** file/folder operations (create, rename, delete) work via FileService
 **And** the plugin registers via AbstractPlugin.activate() only — no internal imports
 **And** panel icon uses "folder-symbolic" XDG icon
 **And** keyboard shortcut Ctrl+Shift+O opens folder
-**And** the explorer shows file/folder icons matching system theme
 **And** breadcrumb path shows current folder location
+
+### Story 2.2: File Explorer — Lazy Loading & Performance
+
+As a user,
+I want the file tree to load folders lazily without scanning the entire project,
+So that large projects open instantly without lag.
+
+**Acceptance Criteria:**
+
+**Given** the file tree is loaded
+**When** I expand a folder, only that folder's contents are loaded (no recursive scan)
+**And** expanding 100+ subfolders does not cause perceptible lag (>100ms)
+**And** file/folder icons match the system GTK theme (via Gio.content_type_get_icon)
+**And** the explorer re-loads when FolderChangedEvent is emitted
+**And** hidden files are hidden by default; toggle available in panel header menu
+
+### Story 2.3: File Explorer — Context Menu & File Operations
+
+As a user,
+I want to create, rename, and delete files and folders from the explorer,
+So that I can manage my project without switching to the terminal.
+
+**Acceptance Criteria:**
+
+**Given** the file explorer tree is visible
+**When** I right-click a file, context menu shows: Open, Rename (inline), Delete (confirm), Copy Relative Path, Copy Absolute Path
+**When** I right-click a folder, context menu shows: New File, New Folder, Rename, Delete
+**And** file/folder create, rename, delete operations work via FileService
+**And** rename uses inline editing (no separate dialog)
+**And** delete shows confirmation dialog before removing
+**And** context menus use GtkPopover and match system theme
 
 ---
 
@@ -379,29 +424,59 @@ So that I can review changes with clear visual indicators.
 **And** diff renders in under 100ms for typical files
 **And** "No changes" message shows when file has no diff
 
-### Story 3.2: Source Control Plugin
+### Story 3.2: Source Control — Git Status & File Listing
 
 As a user,
-I want a source control panel with git status, diffs, staging, and commit,
-So that I can complete full review sessions without touching the terminal.
+I want to see all changed files in my project with their git status,
+So that I can quickly assess what has changed without running git commands.
 
 **Acceptance Criteria:**
 
 **Given** SourceControlPlugin is implemented
 **When** I open the Source Control panel, changed files are listed with status badges
 **And** M files show yellow badge, A green, D red, R blue
-**And** clicking a file opens an inline diff via DiffView
-**And** each file has a stage/unstage checkbox
+**And** branch name displays in the panel header as a dropdown
+**And** clicking the branch dropdown lists all local branches
+**And** switching branches warns if dirty working tree
+**And** if git is not installed, panel shows "git not found" with install instructions
+**And** keyboard shortcut Ctrl+Shift+G focuses Source Control panel
+**And** the plugin registers via AbstractPlugin.activate() only
+
+### Story 3.3: Source Control — Inline Diff Viewing
+
+As a user,
+I want to click a changed file and see its diff inline in the editor,
+So that I can review changes without opening a separate tool.
+
+**Acceptance Criteria:**
+
+**Given** the Source Control panel shows changed files
+**When** I click a changed file, a read-only diff tab opens in the editor area
+**And** the diff tab shows "~ filename (diff)" as the tab label
+**And** the diff uses GtkSourceView with "diff" language for syntax highlighting
+**And** staged diffs use `git diff --cached`, unstaged use `git diff`
+**And** the diff tab is distinct from normal file tabs for the same path
+**And** clicking another changed file replaces the diff tab or opens a new one
+
+### Story 3.4: Source Control — Staging & Commit Workflow
+
+As a user,
+I want to stage/unstage files and commit from within the editor,
+So that I can complete the full review cycle without touching the terminal.
+
+**Acceptance Criteria:**
+
+**Given** changed files are listed in the Source Control panel
+**When** I check a file's checkbox, it stages via `git add`
+**And** unchecking unstage via `git restore --staged`
 **And** staged count badge updates immediately on toggle
 **And** commit bar shows: multi-line message input + Commit button
 **And** Commit button is disabled until staged files exist AND message is entered
 **And** Ctrl+Enter submits the commit
-**And** successful commit shows toast notification and clears the panel
-**And** branch name displays in the panel header
-**And** clicking branch opens branch switcher
-**And** if git is not installed, panel shows "git not found" with install instructions
-**And** the plugin registers via AbstractPlugin.activate() only
-**And** keyboard shortcut Ctrl+Shift+G focuses Source Control panel
+**And** character counter shows 72-char soft limit (yellow at 72, red at 80)
+**And** successful commit shows toast notification, clears message, refreshes panel
+**And** manual refresh button in panel header re-reads git status
+**And** panel auto-refreshes on FileSavedEvent
 
 ---
 
@@ -453,24 +528,53 @@ So that I can find and replace code across my entire project.
 
 Users can customize editor appearance, font, display options, and theme mode with settings persisting across sessions.
 
-### Story 5.1: Preferences Plugin
+### Story 5.1: Preferences — Basic Settings Panel
 
 As a user,
-I want a preferences panel where I can configure editor settings,
-So that I can customize font, theme, and display options.
+I want a preferences dialog where I can configure editor settings,
+So that I can customize font, tab width, and indentation.
 
 **Acceptance Criteria:**
 
 **Given** PreferencesPlugin is implemented
-**When** I open Preferences (Ctrl+,), grouped settings are displayed
-**And** editor font, tab width, indentation are configurable
-**And** line numbers, current line highlight, word wrap are toggleable
-**And** theme mode (light/dark/system) is selectable
-**And** editor color scheme is selectable with live preview
-**And** changes apply immediately (live preview for theme)
+**When** I open Preferences (Ctrl+,), an Adw.PreferencesWindow is displayed
+**And** Editor page shows: Font, Tab Width, Insert Spaces, Show Line Numbers, Highlight Current Line, Word Wrap, Auto-indent
+**And** all editor settings apply immediately (live preview)
 **And** settings persist to ~/.config/slate/config.ini via ConfigService
 **And** the plugin registers via AbstractPlugin.activate() only
 **And** keyboard shortcut Ctrl+, opens Preferences
+
+### Story 5.2: Preferences — Theme & Appearance
+
+As a user,
+I want to switch between light, dark, and system theme modes and select editor color schemes,
+So that the editor matches my visual preferences.
+
+**Acceptance Criteria:**
+
+**Given** the Appearance page in Preferences
+**When** I select Color Mode (System / Light / Dark), the app theme changes immediately
+**And** Editor Theme Mode (Auto / Explicit) controls scheme behavior
+**And** Auto mode: editor scheme follows shell mode (light scheme / dark scheme)
+**And** Explicit mode: chosen editor scheme persists regardless of shell mode
+**And** Light Scheme, Dark Scheme, and Explicit Scheme show curated GtkSourceView schemes
+**And** theme changes emit ThemeChangedEvent so all open EditorViews update
+**And** dark mode cycle button in header bar (🌙/☀/⊙) works correctly
+
+### Story 5.3: Preferences — Editor Behavior Settings
+
+As a user,
+I want to configure editor behavior beyond font and tab settings,
+So that the editor works the way I need it to.
+
+**Acceptance Criteria:**
+
+**Given** the Editor page in Preferences
+**When** I toggle any setting, the change applies immediately to all open editors
+**And** changes persist across sessions (config.ini is saved on every change)
+**And** EditorView.apply_config() does not overwrite unrelated theme settings
+**And** settings are grouped with section headers for clarity
+**And** all changes use Adw widgets (SwitchRow, SpinRow, ComboRow)
 
 ---
 
@@ -492,3 +596,133 @@ So that I can build custom plugins confidently.
 **And** all 4 core plugins (Explorer, Search, Source Control, Preferences) use only the public API — code inspection confirms no internal imports
 **And** at least one custom plugin can be written and loaded within an hour using the docs
 **And** plugin errors (syntax, API misuse) are caught, logged, and shown to the user without crashing Slate
+
+### Story 6.2: Plugin Loading & Lifecycle Management
+
+As a developer,
+I want plugins to load, activate, and deactivate reliably,
+So that the plugin system is robust and predictable.
+
+**Acceptance Criteria:**
+
+**Given** PluginManager is implemented
+**When** Slate starts, all registered plugins are activated in order
+**And** activate() is called with a valid PluginContext containing service registry, event bus, config, and host UI bridge
+**And** if a plugin's activate() raises an exception, the error is logged to stderr, the plugin is skipped, and Slate continues loading
+**And** deactivate() is called on all active plugins during shutdown
+**And** get_plugin(plugin_id) returns the plugin instance or None
+**And** get_activity_bar_items() returns sorted ActivityBarItem list from activated plugins
+**And** plugin isolation tests confirm one failing plugin does not crash startup
+
+### Story 6.3: Plugin Error Handling & User Feedback
+
+As a user,
+I want clear feedback when a plugin fails to load or has errors,
+So that I can fix issues without losing the rest of the editor.
+
+**Acceptance Criteria:**
+
+**Given** a plugin has a syntax error or import failure
+**When** Slate attempts to activate it, the error is logged and the plugin is skipped
+**And** an error notification (Adw.Toast) is shown in the UI with the plugin ID and error summary
+**Given** a plugin raises an exception during runtime (after activation)
+**When** the exception occurs, it is caught by the host bridge and does not crash Slate
+**And** the error is logged to stderr with the plugin ID and exception details
+**And** the plugin's panels/actions remain registered but may show degraded state
+**And** the user can disable a failing plugin via Preferences
+
+---
+
+## Epic 7: Performance & Quality Validation
+
+All non-functional requirements are explicitly validated through automated tests and manual verification — startup time, responsiveness, crash resistance, and accessibility.
+
+### Story 7.1: Performance Validation — Startup Time
+
+As a developer,
+I want automated tests that verify cold start time is under 2 seconds,
+So that performance regressions are caught before shipping.
+
+**Acceptance Criteria:**
+
+**Given** a performance test suite exists
+**When** I run `pytest tests/performance/test_startup.py` it measures cold start time
+**And** the test launches `slate` via subprocess and measures time to window ready
+**And** the test fails if cold start exceeds 2 seconds on reference hardware
+**And** the test is included in CI and blocks merges on regression
+**And** NFR-001 (sub-2s cold start) and NFR-003 (50%+ faster than VSCode) are explicitly validated
+
+### Story 7.2: Performance Validation — Runtime Responsiveness
+
+As a developer,
+I want tests that verify file navigation, search, and diff viewing are under 100ms,
+So that interactive performance meets user expectations.
+
+**Acceptance Criteria:**
+
+**Given** runtime performance tests exist
+**When** I run `pytest tests/performance/test_responsiveness.py` it measures:
+- File open time (< 100ms for files < 1MB)
+- Search result time (ripgrep for typical queries)
+- Diff render time (< 100ms for typical files)
+**And** tab switching is < 50ms
+**And** all tests use real file operations (not mocked)
+**And** NFR-002 (no perceptible lag) and NFR-005 (zero terminal interruptions) are explicitly validated
+
+### Story 7.3: Quality Validation — Crash Resistance
+
+As a developer,
+I want tests that verify the editor handles errors gracefully without crashing,
+So that reliability meets the zero-crash requirement.
+
+**Acceptance Criteria:**
+
+**Given** crash resistance tests exist
+**When** I run `pytest tests/quality/test_crash_resistance.py` it validates:
+- Plugin activation failure does not crash Slate
+- Missing ripgrep shows graceful error (not crash)
+- Missing git shows graceful error (not crash)
+- Opening a non-existent file shows dialog (not crash)
+- Closing dirty tab and choosing Cancel preserves state
+**And** all error scenarios are tested with real service calls
+**And** NFR-004 (zero crashes in a week of daily use) is explicitly validated
+
+### Story 7.4: UX Validation — Accessibility Compliance
+
+As a developer,
+I want accessibility tests and manual checklists that verify WCAG 2.1 AA compliance,
+So that the editor is usable by developers with accessibility needs.
+
+**Acceptance Criteria:**
+
+**Given** accessibility tests and checklists exist
+**When** I run manual accessibility audit, it covers:
+- Tab through all interactive elements — focus indicator visible on each
+- All keyboard shortcuts documented in tooltips
+- Screen reader (Orca) reads all UI elements correctly
+- High contrast mode toggle works via system settings
+- Minimum touch target sizes (44x44px) for interactive elements
+**And** GTK4 built-in accessibility (ATK) is leveraged for all standard widgets
+**And** custom widgets implement AtkAccessible interface
+**And** UX-DR12 (Accessibility) and UX-DR17 (GNOME Integration) are explicitly validated
+
+### Story 7.5: UX Validation — Feedback & Empty States
+
+As a developer,
+I want tests and visual verification of toast notifications, empty states, and loading indicators,
+So that UX patterns are consistent and user-friendly.
+
+**Acceptance Criteria:**
+
+**Given** UX feedback tests exist
+**When** I verify feedback patterns, the following work correctly:
+- Toast on commit success: "Changes committed" with branch name
+- Toast on save: "File saved" (auto-dismiss after 2s)
+- Empty state in File Explorer: "This folder is empty" with Create File/Folder action
+- Empty state in Source Control: "All changes committed" with checkmark
+- Empty state in Search: "No matches found for '[query]'" with Modify search link
+- Error state: "ripgrep not found" with install instructions (not a crash)
+- Loading: no indicator for <100ms operations; spinner for commit/save
+**And** UX-DR11 (Feedback Patterns), UX-DR14 (Empty States), and UX-DR15 (Loading States) are explicitly validated
+
+<!-- Story repeat ends -->
