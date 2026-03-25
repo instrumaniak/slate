@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-25T06:14:00.000Z
-last_updated: 2026-03-25T14:20:00.000Z
+last_updated: 2026-03-25T18:30:00.000Z
 project: slate
 project_key: NOKEY
 tracking_system: file-system
@@ -47,7 +47,7 @@ development_status:
   1-1-project-initialization-packaging: done
   1-2-core-layer-models-events-eventbus: done
    1-3-plugin-api-contracts-pluginmanager: done
-  1-4-services-layer-configservice-themeservice: backlog
+   1-4-services-layer-configservice-themeservice: done
   1-5-services-layer-fileservice-gitservice: backlog
   1-6-main-window-editor-view: backlog
   1-7-tab-manager-save-discard-guard: backlog
