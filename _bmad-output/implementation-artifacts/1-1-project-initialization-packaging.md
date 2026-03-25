@@ -1,6 +1,6 @@
 # Story 1.1: Project Initialization & Packaging
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -45,33 +45,33 @@ so that all subsequent features have a solid foundation with correct dependencie
    - [x] Create `scripts/` directory
    - [x] Create `docs/` directory
    - [x] Create `data/schemes/` directory
-- [ ] Task 2: Create `pyproject.toml` with dependencies (AC: 2, 5)
-  - [ ] Define project metadata (name, version, description)
-  - [ ] Set `python_requires >=3.10`
-  - [ ] Add runtime dependencies: `PyGObject>=3.44`, `gitpython>=3.1`
-  - [ ] Add dev dependencies: `pytest>=7.0`, `pytest-cov>=4.0`, `ruff`, `mypy`
-  - [ ] Configure `[project.scripts]` entry point: `slate = slate.main:main`
-  - [ ] Configure build system (hatchling or setuptools)
-- [ ] Task 3: Create `slate/version.py` module (AC: 4)
-  - [ ] Define `__version__ = "0.1.0"`
-  - [ ] Make importable from `slate/__init__.py`
-- [ ] Task 4: Create `slate/__main__.py` entry point (AC: 4)
-  - [ ] Implement `if __name__ == "__main__"` block
-  - [ ] Call `slate.main:main()`
-- [ ] Task 5: Create `slate/main.py` placeholder (AC: 4)
-  - [ ] Define `main()` function
-  - [ ] Print version on invocation
-  - [ ] Perform Python 3.10+ version check with clear error message
-- [ ] Task 6: Create `.gitignore` for Python project
-  - [ ] Exclude `__pycache__/`, `.mypy_cache/`, `.pytest_cache/`, `*.egg-info/`
-  - [ ] Exclude `.venv/`, `venv/`, `*.pyc`
-- [ ] Task 7: Create `Makefile` with dev shortcuts (AC: implicit from architecture)
-  - [ ] `lint` target: `ruff check slate/`
-  - [ ] `format` target: `ruff format slate/`
-  - [ ] `typecheck` target: `mypy slate/`
-  - [ ] `test` target: `pytest tests/ --cov=slate`
-- [ ] Task 8: Create `scripts/install-deps.sh` for system packages
-  - [ ] Document apt dependencies: `python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-gtksource-5 gir1.2-adw-1 git ripgrep`
+- [x] Task 2: Create `pyproject.toml` with dependencies (AC: 2, 5)
+   - [x] Define project metadata (name, version, description)
+   - [x] Set `python_requires >=3.10`
+   - [x] Add runtime dependencies: `PyGObject>=3.44`, `gitpython>=3.1`
+   - [x] Add dev dependencies: `pytest>=7.0`, `pytest-cov>=4.0`, `ruff`, `mypy`
+   - [x] Configure `[project.scripts]` entry point: `slate = slate.main:main`
+   - [x] Configure build system (hatchling or setuptools)
+- [x] Task 3: Create `slate/version.py` module (AC: 4)
+   - [x] Define `__version__ = "0.1.0"`
+   - [x] Make importable from `slate/__init__.py`
+- [x] Task 4: Create `slate/__main__.py` entry point (AC: 4)
+   - [x] Implement `if __name__ == "__main__"` block
+   - [x] Call `slate.main:main()`
+- [x] Task 5: Create `slate/main.py` placeholder (AC: 4)
+   - [x] Define `main()` function
+   - [x] Print version on invocation
+   - [x] Perform Python 3.10+ version check with clear error message
+- [x] Task 6: Create `.gitignore` for Python project
+   - [x] Exclude `__pycache__/`, `.mypy_cache/`, `.pytest_cache/`, `*.egg-info/`
+   - [x] Exclude `.venv/`, `venv/`, `*.pyc`
+- [x] Task 7: Create `Makefile` with dev shortcuts (AC: implicit from architecture)
+   - [x] `lint` target: `ruff check slate/`
+   - [x] `format` target: `ruff format slate/`
+   - [x] `typecheck` target: `mypy slate/`
+   - [x] `test` target: `pytest tests/ --cov=slate`
+- [x] Task 8: Create `scripts/install-deps.sh` for system packages
+   - [x] Document apt dependencies: `python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-gtksource-5 gir1.2-adw-1 git ripgrep`
 
 ## Dev Notes
 
@@ -198,11 +198,23 @@ Amelia (Developer Agent)
 
 ### Completion Notes List
 - ✅ Task 1: Created complete directory structure with all required packages and __init__.py files
-- Created tests/test_project_structure.py to verify directory structure
-- All tests pass for Task 1 requirements
+- ✅ Task 2: Created pyproject.toml with Python 3.10+, PyGObject, gitpython, dev dependencies, CLI entry point
+- ✅ Task 3: Created slate/version.py with __version__ = "0.1.0"
+- ✅ Task 4: Created slate/__main__.py for `python -m slate` entry point
+- ✅ Task 5: Created slate/main.py with main() function and Python 3.10+ version check
+- ✅ Task 6: Verified .gitignore already covers all requirements
+- ✅ Task 7: Created Makefile with lint, format, typecheck, test targets
+- ✅ Task 8: Created scripts/install-deps.sh with apt dependencies documentation
+- All 12 tests pass verifying AC compliance
 
 ### File List
+- `pyproject.toml` (created)
+- `Makefile` (created)
+- `.gitignore` (verified - already existed)
 - `slate/__init__.py` (created)
+- `slate/__main__.py` (created)
+- `slate/main.py` (created)
+- `slate/version.py` (created)
 - `slate/core/__init__.py` (created)
 - `slate/services/__init__.py` (created)
 - `slate/ui/__init__.py` (created)
@@ -210,6 +222,5 @@ Amelia (Developer Agent)
 - `slate/plugins/core/__init__.py` (created)
 - `tests/__init__.py` (created)
 - `tests/test_project_structure.py` (created)
-- `scripts/` (directory created)
-- `docs/` (directory created)
-- `data/schemes/` (directory created)
+- `tests/test_pyproject_toml.py` (created)
+- `scripts/install-deps.sh` (created)

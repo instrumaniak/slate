@@ -1,9 +1,10 @@
 #!/bin/bash
 # Slate launcher script
-# Usage: slate [path]
+# Usage: ./scripts/slate [path]
 #   - No args: open blank window, restore last folder
 #   - slate .   : open current directory
 #   - slate <path> : open specified file or folder
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-python3 "$SCRIPT_DIR/main.py" "$@"
+cd "$SCRIPT_DIR/.."
+python3 -m slate "$@"

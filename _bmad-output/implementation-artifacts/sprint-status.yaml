@@ -44,7 +44,7 @@ story_location: _bmad-output/implementation-artifacts
 development_status:
   # Epic 1: Editor Core & Project Startup
   epic-1: in-progress
-  1-1-project-initialization-packaging: ready-for-dev
+  1-1-project-initialization-packaging: review
   1-2-core-layer-models-events-eventbus: backlog
   1-3-plugin-api-contracts-pluginmanager: backlog
   1-4-services-layer-configservice-themeservice: backlog
