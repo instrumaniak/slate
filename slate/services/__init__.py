@@ -4,20 +4,28 @@ This module exports the core services for the Slate editor.
 Services are registered with the service registry for PluginContext access.
 """
 
-from slate.services.config_service import ConfigService, DEFAULT_CONFIG
+from slate.services.config_service import DEFAULT_CONFIG, ConfigService
+from slate.services.file_service import FileService
+from slate.services.git_service import GitService
 from slate.services.theme_service import ThemeService
 
 __all__ = [
     "ConfigService",
     "DEFAULT_CONFIG",
+    "FileService",
+    "GitService",
     "ThemeService",
     "get_config_service",
+    "get_file_service",
+    "get_git_service",
     "get_theme_service",
 ]
 
 # Service instances (lazy initialization)
 _config_service: ConfigService | None = None
 _theme_service: ThemeService | None = None
+_file_service: FileService | None = None
+_git_service: GitService | None = None
 
 
 def get_config_service() -> ConfigService:
@@ -42,3 +50,27 @@ def get_theme_service() -> ThemeService:
     if _theme_service is None:
         _theme_service = ThemeService(config_service=get_config_service())
     return _theme_service
+
+
+def get_file_service() -> FileService:
+    """Get or create the FileService singleton.
+
+    Returns:
+        The FileService instance.
+    """
+    global _file_service
+    if _file_service is None:
+        _file_service = FileService()
+    return _file_service
+
+
+def get_git_service() -> GitService:
+    """Get or create the GitService singleton.
+
+    Returns:
+        The GitService instance.
+    """
+    global _git_service
+    if _git_service is None:
+        _git_service = GitService()
+    return _git_service
