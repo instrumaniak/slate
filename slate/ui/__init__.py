@@ -1,3 +1,5 @@
 """UI layer - GTK widgets."""
 
-__all__ = []
+from slate.ui.main_window import SlateWindow
+
+__all__ = ["SlateWindow"]

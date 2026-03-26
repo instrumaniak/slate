@@ -1,0 +1,110 @@
+from __future__ import annotations
+
+import sys
+import logging
+
+logger = logging.getLogger(__name__)
+
+try:
+    import gi
+
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    gi.require_version("GtkSource", "5")
+    from gi.repository import Gtk, Adw, Gio
+
+    GTK_AVAILABLE = True
+except (ImportError, ValueError) as e:
+    print(f"Missing required GTK components: {e}", file=sys.stderr)
+    print("Install: python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-gtksource-5", file=sys.stderr)
+    sys.exit(1)
+
+
+class SlateApplication(Adw.Application):
+    """Main application class - composition root.
+
+    All dependency injection wiring happens here.
+    """
+
+    def __init__(self) -> None:
+        """Initialize SlateApplication."""
+        super().__init__(
+            application_id="com.slate.editor",
+            flags=Gio.ApplicationFlags.NON_UNIQUE,
+        )
+
+        self._config_service = None
+        self._theme_service = None
+        self._file_service = None
+        self._main_window = None
+
+        quit_action = Gio.SimpleAction.new("quit", None)
+        quit_action.connect("activate", lambda *_: self.quit())
+        self.add_action(quit_action)
+
+        self.connect("activate", self._on_activate)
+
+    def _on_activate(self, app: Adw.Application) -> None:
+        """Handle application activation."""
+        from slate.services import get_config_service, get_theme_service, get_file_service
+        from slate.ui.main_window import create_main_window
+
+        self._config_service = get_config_service()
+        self._theme_service = get_theme_service()
+        self._file_service = get_file_service()
+
+        self._theme_service.resolve_theme()
+
+        cli_path = self._process_cli_args()
+
+        self._main_window = create_main_window(
+            app,
+            self._config_service,
+            self._theme_service,
+        )
+
+        if cli_path:
+            self._main_window.open_file_on_startup(cli_path)
+
+        self._main_window.present()
+
+    def _process_cli_args(self) -> str | None:
+        """Process command line arguments.
+
+        Returns:
+            Path to open on startup, or None.
+        """
+        if len(sys.argv) > 1:
+            path = sys.argv[1]
+            import os
+
+            if os.path.exists(path):
+                return path
+        return None
+
+    def get_main_window(self):
+        """Get the main window instance."""
+        return self._main_window
+
+
+def main() -> int:
+    """Application entry point."""
+    if sys.version_info < (3, 10):
+        print(
+            f"Slate requires Python 3.10 or later. You are running Python "
+            f"{sys.version_info.major}.{sys.version_info.minor}.",
+            file=sys.stderr,
+        )
+        return 1
+
+    app = SlateApplication()
+    app.register(None)
+
+    return app.run(None)
+
+
+if __name__ == "__main__":
+    from slate.version import __version__
+
+    print(f"Slate v{__version__}")
+    sys.exit(main())

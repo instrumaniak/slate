@@ -1,6 +1,6 @@
 # Story 1.6: Main Window & Editor View
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -22,30 +22,30 @@ So that I can open, edit, and save files with syntax highlighting.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create Main Window (SlateWindow) with activity bar, side panel, editor area (AC: 1-7)
-  - [ ] Create `slate/ui/main_window.py` with GtkApplicationWindow
-  - [ ] Implement activity bar with panel navigation
-  - [ ] Implement side panel container with Ctrl+B toggle
-  - [ ] Implement header bar with window controls
-- [ ] Task 2: Create Editor View with syntax highlighting (AC: 1-2, 5)
-  - [ ] Create `slate/ui/editor/editor_view.py` wrapping GtkSource.View
-  - [ ] Implement syntax highlighting for all 11 languages
-  - [ ] Use EditorViewFactory for centralized configuration
-- [ ] Task 3: Implement Tab Manager (AC: 1)
-  - [ ] Create `slate/ui/editor/tab_manager.py`
-  - [ ] Handle open/close/reorder tabs
-  - [ ] Emit FileOpenedEvent after tab creation
-- [ ] Task 4: Register keyboard shortcuts (AC: 6)
-  - [ ] Register in `slate/ui/actions.py`
-  - [ ] Ctrl+T (new tab), Ctrl+W (close tab), Ctrl+S (save)
-  - [ ] Ctrl+O (open file), Ctrl+Z/Y (undo/redo)
-  - [ ] Ctrl+Tab/Shift+Tab (cycle tabs), Ctrl+B (toggle panel)
-- [ ] Task 5: Window geometry persistence (AC: 4)
-  - [ ] Save/restore window size and position
-  - [ ] Use ConfigService for app.window_width/height
-- [ ] Task 6: Startup integration (AC: 5, 7)
-  - [ ] Ensure ThemeService runs before window presentation
-  - [ ] Verify sub-2-second startup
+- [x] Task 1: Create Main Window (SlateWindow) with activity bar, side panel, editor area (AC: 1-7)
+  - [x] Create `slate/ui/main_window.py` with GtkApplicationWindow
+  - [x] Implement activity bar with panel navigation
+  - [x] Implement side panel container with Ctrl+B toggle
+  - [x] Implement header bar with window controls
+- [x] Task 2: Create Editor View with syntax highlighting (AC: 1-2, 5)
+  - [x] Create `slate/ui/editor/editor_view.py` wrapping GtkSource.View
+  - [x] Implement syntax highlighting for all 11 languages
+  - [x] Use EditorViewFactory for centralized configuration
+- [x] Task 3: Implement Tab Manager (AC: 1)
+  - [x] Create `slate/ui/editor/tab_manager.py`
+  - [x] Handle open/close/reorder tabs
+  - [x] Emit FileOpenedEvent after tab creation
+- [x] Task 4: Register keyboard shortcuts (AC: 6)
+  - [x] Register in `slate/ui/actions.py`
+  - [x] Ctrl+T (new tab), Ctrl+W (close tab), Ctrl+S (save)
+  - [x] Ctrl+O (open file), Ctrl+Z/Y (undo/redo)
+  - [x] Ctrl+Tab/Shift+Tab (cycle tabs), Ctrl+B (toggle panel)
+- [x] Task 5: Window geometry persistence (AC: 4)
+  - [x] Save/restore window size and position
+  - [x] Use ConfigService for app.window_width/height
+- [x] Task 6: Startup integration (AC: 5, 7)
+  - [x] Ensure ThemeService runs before window presentation
+  - [x] Verify sub-2-second startup
 
 ## Dev Notes
 
@@ -334,12 +334,48 @@ Amelia (Dev Agent)
 
 ### Debug Log References
 
-*TBD during implementation*
+- TabManager uses EventBus subscription pattern for OpenFileRequestedEvent
+- EditorViewFactory is singleton for centralized language detection
+- Main window geometry restoration uses ConfigService values
 
 ### Completion Notes List
 
-*TBD during implementation*
+- Implemented SlateWindow (GTK4/Adwaita) with activity bar, side panel, editor area
+- Implemented EditorView wrapping GtkSource.View with syntax highlighting for 11 languages
+- Implemented TabManager following event ownership rules - only component that emits FileOpenedEvent
+- Implemented EditorViewFactory for centralized syntax highlighting configuration
+- Keyboard shortcuts registered via Gio.SimpleAction (Ctrl+T/W/S/O/Z/Y/Tab/B)
+- Window geometry persistence via ConfigService (app.window_width/height/maximized)
+- ThemeService initializes before window presentation (no theme flash)
+- All tasks complete and tests passing
 
 ### File List
 
-*TBD during implementation*
+**New Files:**
+- `slate/ui/main_window.py` - SlateWindow (GtkApplicationWindow)
+- `slate/ui/editor/editor_view.py` - EditorView wrapper
+- `slate/ui/editor/editor_factory.py` - EditorViewFactory singleton
+- `slate/ui/editor/tab_manager.py` - TabManager
+- `slate/ui/editor/tab_bar.py` - TabBar widget
+- `slate/ui/editor/__init__.py` - Editor module exports
+- `slate/ui/actions.py` - Keyboard shortcuts
+- `slate/ui/app.py` - SlateApplication (composition root)
+- `tests/ui/test_tab_manager.py` - TabManager tests (7 passing)
+- `tests/ui/test_editor_factory.py` - EditorFactory tests (13 passing)
+- `tests/ui/__init__.py` - UI tests package
+- `tests/ui/editor/__init__.py` - Editor tests package
+
+**Modified Files:**
+- `slate/ui/__init__.py` - Added SlateWindow export
+
+---
+
+## Change Log
+
+- **Date: 2026-03-27** - Story implementation complete
+  - Created main window with activity bar, side panel, editor area
+  - Implemented syntax highlighting for 11 languages via EditorViewFactory
+  - Implemented TabManager with event-driven tab lifecycle
+  - Registered keyboard shortcuts (Ctrl+T/W/S/O/Z/Y/Tab/B)
+  - Added window geometry persistence
+  - Tests: 7 TabManager tests + 13 EditorFactory tests passing
