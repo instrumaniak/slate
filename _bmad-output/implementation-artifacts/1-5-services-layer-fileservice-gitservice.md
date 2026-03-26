@@ -369,3 +369,27 @@ Amelia (Dev Agent)
 - Implemented GitService with get_status, get_diff, stage_file, unstage_file, commit, get_branches, switch_branch
 - Registered both services in services/__init__.py with singleton factory functions
 - Added comprehensive tests achieving 90%+ coverage for both services
+
+### Code Review Fixes Applied (Post-Review)
+**Date:** 2026-03-27
+**Review Type:** Comprehensive adversarial code review (Blind Hunter, Edge Case Hunter, Acceptance Auditor)
+
+**Critical Fixes (12 patch findings addressed):**
+
+1. **Input validation** - Added `_validate_path()` helper to check for `None` paths and null bytes (file_service.py)
+2. **UTF-8 error handling** - `read_file()` now catches `UnicodeDecodeError` and raises `ValueError` with context
+3. **Content type validation** - `write_file()` validates `content` is not `None` and is a `str` instance
+4. **Thread-safe singletons** - Added `threading.Lock()` with double-checked locking pattern in `__init__.py`
+5. **Error logging** - `list_directory()` now logs warnings for stat failures instead of silently swallowing
+6. **Directory write protection** - `write_file()` checks if target is a directory before writing
+7. **GIO error handling** - `monitor_directory()` catches `ImportError` and GIO exceptions with descriptive messages
+8. **Deduplication fix** - `get_status()` uses `set()` for O(1) lookup instead of O(n²) `any()` loop
+9. **Untracked status** - Changed untracked file status from "A" (confusing) to "?" (standard)
+10. **Git availability cache** - `_check_git_available()` caches result after first successful check for performance
+
+**Test updates:**
+- Updated `test_added_file` to expect "?" status instead of "A" for untracked files
+
+**All 55 tests pass, ruff check passes.**
+
+**Status:** Ready for re-review or merge

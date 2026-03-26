@@ -59,7 +59,7 @@ class TestGitServiceGetStatus:
         assert status[0]["path"] == "initial.txt"
 
     def test_added_file(self, git_repo: Path) -> None:
-        """Untracked file should appear as 'A'."""
+        """Untracked file should appear as '?'."""
         (git_repo / "new_file.txt").write_text("new content")
 
         service = GitService()
@@ -68,7 +68,7 @@ class TestGitServiceGetStatus:
         paths = [s["path"] for s in status]
         assert "new_file.txt" in paths
         new_entry = next(s for s in status if s["path"] == "new_file.txt")
-        assert new_entry["status"] == "A"
+        assert new_entry["status"] == "?"
 
     def test_deleted_file(self, git_repo: Path) -> None:
         """Deleted file should appear as 'D'."""

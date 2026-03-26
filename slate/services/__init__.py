@@ -4,6 +4,8 @@ This module exports the core services for the Slate editor.
 Services are registered with the service registry for PluginContext access.
 """
 
+import threading
+
 from slate.services.config_service import DEFAULT_CONFIG, ConfigService
 from slate.services.file_service import FileService
 from slate.services.git_service import GitService
@@ -27,6 +29,12 @@ _theme_service: ThemeService | None = None
 _file_service: FileService | None = None
 _git_service: GitService | None = None
 
+# Locks for thread-safe singleton initialization
+_config_lock = threading.Lock()
+_theme_lock = threading.Lock()
+_file_lock = threading.Lock()
+_git_lock = threading.Lock()
+
 
 def get_config_service() -> ConfigService:
     """Get or create the ConfigService singleton.
@@ -36,7 +44,9 @@ def get_config_service() -> ConfigService:
     """
     global _config_service
     if _config_service is None:
-        _config_service = ConfigService()
+        with _config_lock:
+            if _config_service is None:
+                _config_service = ConfigService()
     return _config_service
 
 
@@ -48,7 +58,9 @@ def get_theme_service() -> ThemeService:
     """
     global _theme_service
     if _theme_service is None:
-        _theme_service = ThemeService(config_service=get_config_service())
+        with _theme_lock:
+            if _theme_service is None:
+                _theme_service = ThemeService(config_service=get_config_service())
     return _theme_service
 
 
@@ -60,7 +72,9 @@ def get_file_service() -> FileService:
     """
     global _file_service
     if _file_service is None:
-        _file_service = FileService()
+        with _file_lock:
+            if _file_service is None:
+                _file_service = FileService()
     return _file_service
 
 
@@ -72,5 +86,7 @@ def get_git_service() -> GitService:
     """
     global _git_service
     if _git_service is None:
-        _git_service = GitService()
+        with _git_lock:
+            if _git_service is None:
+                _git_service = GitService()
     return _git_service

@@ -19,31 +19,54 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Status mapping for git change types
 _STATUS_MAP = {
-    "M": "M",
-    "A": "A",
-    "D": "D",
-    "R": "R",
+    "M": "M",  # Modified
+    "A": "A",  # Added (staged)
+    "D": "D",  # Deleted
+    "R": "R",  # Renamed
 }
+
+# Untracked files status code
+_UNTRACKED_STATUS = "?"
+
+# Cache for git availability check
+_git_available: bool | None = None
+_git_available_lock = threading.Lock()
 
 
 def _check_git_available() -> None:
     """Check that git binary and gitpython are available.
 
+    This check is cached after the first call for performance.
+
     Raises:
         RuntimeError: If git is not installed or gitpython is unavailable.
     """
-    try:
-        import git  # noqa: F401
-    except ImportError as e:
-        raise RuntimeError(
-            "gitpython is required for GitService. Install it with: pip install gitpython"
-        ) from e
+    global _git_available
 
-    import shutil
+    # Fast path: already checked and available
+    if _git_available is True:
+        return
 
-    if shutil.which("git") is None:
-        raise RuntimeError("Git is not installed. Install it with: sudo apt install git")
+    with _git_available_lock:
+        # Double-check after acquiring lock
+        if _git_available is True:
+            return
+
+        try:
+            import git  # noqa: F401
+        except ImportError as e:
+            raise RuntimeError(
+                "gitpython is required for GitService. Install it with: pip install gitpython"
+            ) from e
+
+        import shutil
+
+        if shutil.which("git") is None:
+            raise RuntimeError("Git is not installed. Install it with: sudo apt install git")
+
+        _git_available = True
 
 
 class GitService:
@@ -88,13 +111,14 @@ class GitService:
             logger.warning(f"Failed to emit GitStatusChangedEvent: {e}")
 
     def get_status(self, repo_path: str) -> list[dict[str, str]]:
-        """Get changed files with status (M/A/D/R).
+        """Get changed files with status (M/A/D/R/?).
 
         Args:
             repo_path: Path to the git repository.
 
         Returns:
             List of dicts with 'path' and 'status' keys.
+            Status codes: M=modified, A=added (staged), D=deleted, R=renamed, ?=untracked
 
         Raises:
             RuntimeError: If git is not available.
@@ -103,28 +127,33 @@ class GitService:
         with self._lock:
             repo = self._get_repo(repo_path)
             results: list[dict[str, str]] = []
+            seen_paths: set[str] = set()  # O(1) deduplication
 
             # Modified files (staged and unstaged)
             diff_index = repo.index.diff(None)
             for diff_item in diff_index:
                 path = diff_item.b_path or diff_item.a_path
-                change_type = diff_item.change_type
-                status = _STATUS_MAP.get(change_type, change_type)
-                results.append({"path": path, "status": status})
+                if path not in seen_paths:
+                    seen_paths.add(path)
+                    change_type = diff_item.change_type
+                    status = _STATUS_MAP.get(change_type, change_type)
+                    results.append({"path": path, "status": status})
 
-            # Staged changes
+            # Staged changes (that weren't already captured above)
             diff_staged = repo.index.diff("HEAD")
             for diff_item in diff_staged:
                 path = diff_item.b_path or diff_item.a_path
-                change_type = diff_item.change_type
-                status = _STATUS_MAP.get(change_type, change_type)
-                if not any(r["path"] == path for r in results):
+                if path not in seen_paths:
+                    seen_paths.add(path)
+                    change_type = diff_item.change_type
+                    status = _STATUS_MAP.get(change_type, change_type)
                     results.append({"path": path, "status": status})
 
             # Untracked files
             for path in repo.untracked_files:
-                if not any(r["path"] == path for r in results):
-                    results.append({"path": path, "status": "A"})
+                if path not in seen_paths:
+                    seen_paths.add(path)
+                    results.append({"path": path, "status": _UNTRACKED_STATUS})
 
             return results
 

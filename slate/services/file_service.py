@@ -17,6 +17,26 @@ from slate.core.models import FileStatus
 logger = logging.getLogger(__name__)
 
 
+def _validate_path(path: str) -> str:
+    """Validate path parameter and return absolute path.
+
+    Args:
+        path: Path to validate.
+
+    Returns:
+        Absolute path string.
+
+    Raises:
+        TypeError: If path is None.
+        ValueError: If path contains null bytes.
+    """
+    if path is None:
+        raise TypeError("path cannot be None")
+    if "\x00" in path:
+        raise ValueError("path cannot contain null bytes")
+    return os.path.abspath(path)
+
+
 class FileService:
     """File I/O operations. Zero GTK at module level. Service ID: "file".
 
@@ -39,11 +59,13 @@ class FileService:
             List of FileStatus objects for each entry.
 
         Raises:
+            TypeError: If path is None.
+            ValueError: If path contains null bytes.
             FileNotFoundError: If path does not exist.
             NotADirectoryError: If path is not a directory.
             PermissionError: If path is not readable.
         """
-        resolved = os.path.abspath(path)
+        resolved = _validate_path(path)
         if not os.path.exists(resolved):
             raise FileNotFoundError(f"Directory not found: {path}")
         if not os.path.isdir(resolved):
@@ -52,6 +74,8 @@ class FileService:
             raise PermissionError(f"Permission denied: {path}")
 
         results: list[FileStatus] = []
+        errors: list[tuple[str, Exception]] = []
+
         with self._lock:
             for entry in sorted(os.listdir(resolved)):
                 entry_path = os.path.join(resolved, entry)
@@ -67,8 +91,12 @@ class FileService:
                             is_dirty=False,
                         )
                     )
-                except (OSError, PermissionError):
-                    continue
+                except (OSError, PermissionError) as e:
+                    errors.append((entry, e))
+
+        if errors:
+            for entry, error in errors:
+                logger.warning(f"Failed to stat entry '{entry}': {error}")
 
         return results
 
@@ -82,10 +110,14 @@ class FileService:
             File contents as string.
 
         Raises:
+            TypeError: If path is None.
+            ValueError: If path contains null bytes.
             FileNotFoundError: If file does not exist.
+            IsADirectoryError: If path is a directory.
             PermissionError: If file is not readable.
+            ValueError: If file is not valid UTF-8.
         """
-        resolved = os.path.abspath(path)
+        resolved = _validate_path(path)
         if not os.path.exists(resolved):
             raise FileNotFoundError(f"File not found: {path}")
         if not os.path.isfile(resolved):
@@ -93,8 +125,11 @@ class FileService:
         if not os.access(resolved, os.R_OK):
             raise PermissionError(f"Permission denied: {path}")
 
-        with open(resolved, encoding="utf-8") as f:
-            return f.read()
+        try:
+            with open(resolved, encoding="utf-8") as f:
+                return f.read()
+        except UnicodeDecodeError as e:
+            raise ValueError(f"File is not valid UTF-8: {path}") from e
 
     def write_file(self, path: str, content: str) -> None:
         """Write content to file and emit FileSavedEvent.
@@ -106,10 +141,22 @@ class FileService:
             content: Content to write.
 
         Raises:
+            TypeError: If path or content is None.
+            ValueError: If path contains null bytes or is a directory.
             PermissionError: If file is not writable.
             OSError: If write fails for other reasons.
         """
-        resolved = os.path.abspath(path)
+        if content is None:
+            raise TypeError("content cannot be None")
+        if not isinstance(content, str):
+            raise TypeError(f"content must be str, got {type(content).__name__}")
+
+        resolved = _validate_path(path)
+
+        # Check if target is an existing directory
+        if os.path.isdir(resolved):
+            raise IsADirectoryError(f"Cannot write to directory: {path}")
+
         parent = os.path.dirname(resolved)
 
         try:
@@ -137,11 +184,14 @@ class FileService:
             The Gio.FileMonitor instance.
 
         Raises:
+            TypeError: If path is None.
+            ValueError: If path contains null bytes.
             FileNotFoundError: If path does not exist.
             NotADirectoryError: If path is not a directory.
             ImportError: If GIO is not available.
+            RuntimeError: If monitor creation fails.
         """
-        resolved = os.path.abspath(path)
+        resolved = _validate_path(path)
         if not os.path.exists(resolved):
             raise FileNotFoundError(f"Directory not found: {path}")
         if not os.path.isdir(resolved):
@@ -151,16 +201,24 @@ class FileService:
             if self._monitor is not None:
                 self.stop_monitor()
 
-            import gi
+            try:
+                import gi
 
-            gi.require_version("Gio", "2.0")
-            from gi.repository import Gio  # type: ignore[import-untyped]
+                gi.require_version("Gio", "2.0")
+                from gi.repository import Gio  # type: ignore[import-untyped]
+            except ImportError as e:
+                raise ImportError(
+                    "GIO not available. Install GTK/GIO development libraries."
+                ) from e
 
-            gfile = Gio.File.new_for_path(resolved)
-            monitor = gfile.monitor_directory(Gio.FileMonitorFlags.WATCH_MOVES, None)
-            self._monitor = monitor
-            self._monitor_path = resolved
-            return monitor
+            try:
+                gfile = Gio.File.new_for_path(resolved)
+                monitor = gfile.monitor_directory(Gio.FileMonitorFlags.WATCH_MOVES, None)
+                self._monitor = monitor
+                self._monitor_path = resolved
+                return monitor
+            except Exception as e:
+                raise RuntimeError(f"Failed to create file monitor for {path}: {e}") from e
 
     def stop_monitor(self) -> None:
         """Stop active file monitor if any."""
