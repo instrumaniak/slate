@@ -70,6 +70,13 @@ class TabClosedEvent(BaseEvent):
 
 
 @dataclass
+class TabActivatedEvent(BaseEvent):
+    """Emitted when a tab is activated via cycle or selection."""
+
+    path: str
+
+
+@dataclass
 class SearchResultsReadyEvent(BaseEvent):
     """Emitted when search results are ready."""
 

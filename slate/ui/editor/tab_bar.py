@@ -22,7 +22,7 @@ class TabBar(Gtk.Box):
     __gsignals__ = {
         "tab-close-requested": (GObject.SignalFlags.RUN_LAST, None, (str,)),
         "tab-selected": (GObject.SignalFlags.RUN_LAST, None, (str,)),
-        "tab-reordered": (GObject.SignalFlags.RUN_LAST, None, (str, int)),
+        "tab-reordered": (GObject.SignalFlags.RUN_LAST, None, (object, int)),
     }
 
     def __init__(self) -> None:
@@ -49,16 +49,10 @@ class TabBar(Gtk.Box):
         self._tab_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self._tab_box.set_spacing(0)
 
-        self._setup_drag_and_drop()
-
         self._scrolled.set_child(self._tab_box)
         self.append(self._scrolled)
 
         self.set_visible(False)
-
-    def _setup_drag_and_drop(self) -> None:
-        """Setup drag and drop for tab reordering."""
-        pass
 
     def add_tab(self, path: str, label: str, is_dirty: bool = False) -> None:
         """Add a new tab to the bar."""
@@ -96,7 +90,7 @@ class TabBar(Gtk.Box):
         tab_button.set_child(tab_content)
 
         click_controller = Gtk.GestureClick.new()
-        click_controller.connect("pressed", lambda ctrl, n, x, y: self._handle_tab_close(path))
+        click_controller.connect("pressed", lambda ctrl, n, x, y: self._on_close_clicked(path))
         close_btn.add_controller(click_controller)
 
         def on_toggled(_btn) -> None:
@@ -111,6 +105,11 @@ class TabBar(Gtk.Box):
         self._tab_order.append(path)
 
         self.set_visible(True)
+
+    def _on_close_clicked(self, path: str) -> bool:
+        """Handle close button click - consume event to prevent ToggleButton toggle."""
+        self.emit("tab-close-requested", path)
+        return True
 
     def _handle_tab_close(self, path: str) -> None:
         """Handle tab close via click gesture."""

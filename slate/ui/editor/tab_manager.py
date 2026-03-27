@@ -6,7 +6,12 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from slate.core.event_bus import EventBus
-from slate.core.events import FileOpenedEvent, OpenFileRequestedEvent, TabClosedEvent
+from slate.core.events import (
+    FileOpenedEvent,
+    OpenFileRequestedEvent,
+    TabActivatedEvent,
+    TabClosedEvent,
+)
 
 if TYPE_CHECKING:
     from slate.services.file_service import FileService
@@ -195,6 +200,7 @@ class TabManager:
         next_index = (current_index + 1) % len(self._tab_order)
         next_path = self._tab_order[next_index]
         self._active_tab = next_path
+        self._event_bus.emit(TabActivatedEvent(path=next_path))
         return next_path
 
     def cycle_previous(self) -> str | None:
@@ -207,11 +213,12 @@ class TabManager:
             return None
 
         current_index = (
-            self._tab_order.index(self._active_tab) if self._active_tab in self._tab_order else 0
+            self._tab_order.index(self._active_tab) if self._active_tab in self._tab_order else -1
         )
         prev_index = (current_index - 1) % len(self._tab_order)
         prev_path = self._tab_order[prev_index]
         self._active_tab = prev_path
+        self._event_bus.emit(TabActivatedEvent(path=prev_path))
         return prev_path
 
     def reorder_tabs(self, new_order: list[str]) -> None:
@@ -220,7 +227,7 @@ class TabManager:
         Args:
             new_order: New order of tab paths.
         """
-        if set(new_order) != set(self._tabs.keys()):
+        if len(new_order) != len(self._tabs) or set(new_order) != set(self._tabs.keys()):
             logger.warning("Reorder request doesn't match existing tabs")
             return
 

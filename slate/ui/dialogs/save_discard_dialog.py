@@ -40,6 +40,7 @@ class SaveDiscardDialog:
         self._parent = parent
         self._filename = filename
         self._result: str | None = None
+        self._main_loop: GLib.MainLoop | None = None
         self._response_map = {
             "save": "save",
             "discard": "discard",
@@ -102,9 +103,30 @@ class SaveDiscardDialog:
         """
         self._result = self._response_map.get(response, "cancel")
         self._dialog.hide()
+        if self._main_loop and self._main_loop.is_running():
+            self._main_loop.quit()
 
     def run(self) -> str:
-        """Run the dialog synchronously.
+        """Run the dialog synchronously using a nested GLib main loop.
+
+        Returns:
+            "save", "discard", or "cancel"
+        """
+        if not GTK_AVAILABLE:
+            return "cancel"
+
+        self._main_loop = GLib.MainLoop.new(None, False)
+        self._dialog.present()
+        self._main_loop.run()
+        self._main_loop = None
+
+        return self._result or "cancel"
+
+    async def run_async(self, timeout: float = 120.0) -> str:
+        """Run the dialog asynchronously with a timeout.
+
+        Args:
+            timeout: Maximum seconds to wait for a response.
 
         Returns:
             "save", "discard", or "cancel"
@@ -113,23 +135,13 @@ class SaveDiscardDialog:
             return "cancel"
 
         self._dialog.present()
-        while self._result is None:
-            pass
-
-        return self._result
-
-    async def run_async(self) -> str:
-        """Run the dialog asynchronously.
-
-        Returns:
-            "save", "discard", or "cancel"
-        """
-        if not GTK_AVAILABLE:
-            return "cancel"
-
-        self._dialog.present()
-
+        elapsed = 0.0
         while self._result is None:
             await asyncio.sleep(0.05)
+            elapsed += 0.05
+            if elapsed >= timeout:
+                logger.warning("SaveDiscardDialog timed out after %.1fs", timeout)
+                self._dialog.hide()
+                return "cancel"
 
         return self._result
