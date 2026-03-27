@@ -44,9 +44,6 @@ class EditorView(GtkSource.View if GTK_AVAILABLE else object):
         buffer = factory.create_buffer(content, language_id)
         super().__init__(buffer=buffer)
 
-        self.set_hexpand(True)
-        self.set_vexpand(True)
-
         factory.apply_scheme(buffer, editor_scheme)
 
         self._setup_basic_properties()

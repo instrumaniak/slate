@@ -13,7 +13,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Gtk, Adw, Gio, Gdk
+from gi.repository import Gtk, Adw, Gio
 
 logger = logging.getLogger(__name__)
 
@@ -156,10 +156,6 @@ class SlateWindow(Adw.ApplicationWindow):
         self._editor_scroll.set_vexpand(True)
         self._editor_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
 
-        self._editor_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self._editor_container.set_hexpand(True)
-        self._editor_container.set_vexpand(True)
-        self._editor_scroll.set_child(self._editor_container)
         editor_area.append(self._editor_scroll)
 
         return editor_area
@@ -174,26 +170,20 @@ class SlateWindow(Adw.ApplicationWindow):
         tab = self._tab_manager.get_tabs().get(path)
         if tab and "editor_view" in tab:
             editor_view = tab["editor_view"]
-            for child in self._editor_container:
-                if child is editor_view:
-                    self._editor_container.remove(child)
-                    break
+            if self._editor_scroll.get_child() is editor_view:
+                self._editor_scroll.set_child(None)
             del tab["editor_view"]
         self._tab_manager.close_tab(path)
         self._tab_bar.remove_tab(path)
 
         if not self._tab_manager.get_tabs():
-            for child in list(self._editor_container):
-                self._editor_container.remove(child)
+            self._editor_scroll.set_child(None)
 
     def _update_editor_for_tab(self, path: str) -> None:
         """Update editor container to show the selected tab's editor."""
-        for child in self._editor_container:
-            self._editor_container.remove(child)
-
         tab = self._tab_manager.get_tabs().get(path)
         if tab and "editor_view" in tab:
-            self._editor_container.append(tab["editor_view"])
+            self._editor_scroll.set_child(tab["editor_view"])
 
     def open_file_on_startup(self, path: str) -> None:
         """Open a file on application startup."""
@@ -216,14 +206,12 @@ class SlateWindow(Adw.ApplicationWindow):
 
         tab["editor_view"] = editor_view
 
-        for child in self._editor_container:
-            self._editor_container.remove(child)
-
         if editor_view:
-            self._editor_container.append(editor_view)
+            self._editor_scroll.set_child(editor_view)
 
     def _register_shortcuts(self) -> None:
-        """Register keyboard shortcuts via GtkShortcutController."""
+        # Register Gio.SimpleAction shortcuts (no ShortcutController to avoid
+        # interfering with editor focus/click behaviour)
         shortcuts = [
             ("new_tab", "t", self._on_new_tab),
             ("close_tab", "w", self._on_close_tab),
@@ -235,36 +223,10 @@ class SlateWindow(Adw.ApplicationWindow):
             ("next_tab", "Tab", self._on_next_tab),
         ]
 
-        self._shortcut_controller = Gtk.ShortcutController.new()
-
-        for action_name, key, callback in shortcuts:
+        for action_name, _key, callback in shortcuts:
             action = Gio.SimpleAction.new(f"window.{action_name}", None)
             action.connect("activate", lambda *_: callback())
             self.add_action(action)
-
-            keyval = self._parse_key(key)
-            if keyval:
-                shortcut = Gtk.Shortcut.new(
-                    trigger=Gtk.ShortcutTrigger.parse_string(key),
-                    action=Gtk.NamedAction.new(f"window.{action_name}"),
-                )
-                self._shortcut_controller.add_shortcut(shortcut)
-
-        self.add_controller(self._shortcut_controller)
-
-    def _parse_key(self, key: str) -> Gdk.Key | None:
-        """Parse key string to Gdk.Key."""
-        key_map = {
-            "t": Gdk.KEY_t,
-            "w": Gdk.KEY_w,
-            "s": Gdk.KEY_s,
-            "o": Gdk.KEY_o,
-            "b": Gdk.KEY_b,
-            "z": Gdk.KEY_z,
-            "y": Gdk.KEY_y,
-            "Tab": Gdk.KEY_Tab,
-        }
-        return key_map.get(key)
 
     def _on_new_tab(self) -> None:
         logger.debug("Keyboard shortcut: new tab")
