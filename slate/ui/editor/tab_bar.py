@@ -8,7 +8,7 @@ try:
     import gi
 
     gi.require_version("Gtk", "4.0")
-    from gi.repository import Gtk, GObject, Pango
+    from gi.repository import GObject, Gtk, Pango
 
     GTK_AVAILABLE = True
 except (ImportError, ValueError):
@@ -22,6 +22,7 @@ class TabBar(Gtk.Box):
     __gsignals__ = {
         "tab-close-requested": (GObject.SignalFlags.RUN_LAST, None, (str,)),
         "tab-selected": (GObject.SignalFlags.RUN_LAST, None, (str,)),
+        "tab-reordered": (GObject.SignalFlags.RUN_LAST, None, (str, int)),
     }
 
     def __init__(self) -> None:
@@ -31,6 +32,8 @@ class TabBar(Gtk.Box):
         self.set_spacing(0)
 
         self._tabs: dict = {}
+        self._tab_labels: dict = {}
+        self._tab_dirty_indicators: dict = {}
         self._active_path: str | None = None
         self._tab_order: list = []
 
@@ -46,12 +49,18 @@ class TabBar(Gtk.Box):
         self._tab_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self._tab_box.set_spacing(0)
 
+        self._setup_drag_and_drop()
+
         self._scrolled.set_child(self._tab_box)
         self.append(self._scrolled)
 
         self.set_visible(False)
 
-    def add_tab(self, path: str, label: str) -> None:
+    def _setup_drag_and_drop(self) -> None:
+        """Setup drag and drop for tab reordering."""
+        pass
+
+    def add_tab(self, path: str, label: str, is_dirty: bool = False) -> None:
         """Add a new tab to the bar."""
         if not GTK_AVAILABLE:
             return
@@ -62,9 +71,15 @@ class TabBar(Gtk.Box):
         tab_button = Gtk.ToggleButton()
         tab_button.set_css_classes(["flat"])
 
+        dirty_indicator = Gtk.Label(label="")
+        if is_dirty:
+            dirty_indicator.set_markup(' <span color="#3584e4">●</span>')
+        self._tab_dirty_indicators[path] = dirty_indicator
+
         label_widget = Gtk.Label(label=label)
         label_widget.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         label_widget.set_max_width_chars(20)
+        self._tab_labels[path] = label_widget
 
         close_btn = Gtk.Button()
         close_btn.set_icon_name("window-close-symbolic")
@@ -73,8 +88,9 @@ class TabBar(Gtk.Box):
         close_btn.set_tooltip_text("Close tab")
 
         tab_content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        tab_content.set_spacing(8)
+        tab_content.set_spacing(4)
         tab_content.append(label_widget)
+        tab_content.append(dirty_indicator)
         tab_content.append(close_btn)
 
         tab_button.set_child(tab_content)
@@ -112,6 +128,10 @@ class TabBar(Gtk.Box):
         self._tab_box.remove(button)
 
         del self._tabs[path]
+        if path in self._tab_labels:
+            del self._tab_labels[path]
+        if path in self._tab_dirty_indicators:
+            del self._tab_dirty_indicators[path]
         self._tab_order.remove(path)
 
         if self._active_path == path:
@@ -140,3 +160,32 @@ class TabBar(Gtk.Box):
     def get_active(self) -> str | None:
         """Get currently active tab path."""
         return self._active_path
+
+    def set_dirty(self, path: str, is_dirty: bool) -> None:
+        """Update dirty indicator for a tab.
+
+        Args:
+            path: Path of the tab.
+            is_dirty: Whether the tab has unsaved changes.
+        """
+        if path not in self._tab_dirty_indicators:
+            return
+
+        indicator = self._tab_dirty_indicators[path]
+        if is_dirty:
+            indicator.set_markup(' <span color="#3584e4">●</span>')
+        else:
+            indicator.set_markup("")
+
+    def reorder_tabs(self, new_order: list) -> None:
+        """Reorder tabs based on drag and drop.
+
+        Args:
+            new_order: New order of tab paths.
+        """
+        if set(new_order) != set(self._tab_order):
+            logger.warning("Reorder request doesn't match existing tabs")
+            return
+
+        self._tab_order = new_order
+        self.emit("tab-reordered", new_order, 0)

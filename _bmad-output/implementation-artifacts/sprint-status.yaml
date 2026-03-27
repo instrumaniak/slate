@@ -50,7 +50,7 @@ development_status:
   1-4-services-layer-configservice-themeservice: done
   1-5-services-layer-fileservice-gitservice: done
   1-6-main-window-editor-view: done
-  1-7-tab-manager-save-discard-guard: ready-for-dev
+  1-7-tab-manager-save-discard-guard: review
   1-8-cli-entry-point-startup-sequence: backlog
   1-9-development-tooling-ci: backlog
   epic-1-retrospective: optional

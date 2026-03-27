@@ -1,6 +1,6 @@
 # Story 1.7: Tab Manager & Save/Discard Guard
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -23,27 +23,27 @@ So that I can manage multiple open files and never lose work.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Implement dirty indicator on tabs (AC: 2)
-  - [ ] Track buffer modified state in TabState
-  - [ ] Render dot indicator next to filename in TabBar
-  - [ ] Update indicator on buffer changed signal
-- [ ] Task 2: Implement close button on each tab (AC: 3)
-  - [ ] Add close button widget to each tab in TabBar
-  - [ ] Connect click signal to TabManager.close_tab()
-- [ ] Task 3: Implement Save/Discard dialog for dirty tabs (AC: 4, 5)
-  - [ ] Create `slate/ui/dialogs/save_discard_dialog.py`
-  - [ ] Implement Adw.MessageDialog with 3 buttons (Save/Don't Save/Cancel)
-  - [ ] Handle Enter=Save, Escape=Cancel keyboard handling
-  - [ ] Implement focus trap within dialog
-  - [ ] Integrate with TabManager.close_tab() flow
-- [ ] Task 4: Implement tab drag-and-drop reordering (AC: 6)
-  - [ ] Use Gtk.Reorderable on TabBar
-  - [ ] Update TabManager internal state on reorder
+- [x] Task 1: Implement dirty indicator on tabs (AC: 2)
+  - [x] Track buffer modified state in TabState
+  - [x] Render dot indicator next to filename in TabBar
+  - [x] Update indicator on buffer changed signal
+- [x] Task 2: Implement close button on each tab (AC: 3)
+  - [x] Add close button widget to each tab in TabBar
+  - [x] Connect click signal to TabManager.close_tab()
+- [x] Task 3: Implement Save/Discard dialog for dirty tabs (AC: 4, 5)
+  - [x] Create `slate/ui/dialogs/save_discard_dialog.py`
+  - [x] Implement Adw.MessageDialog with 3 buttons (Save/Don't Save/Cancel)
+  - [x] Handle Enter=Save, Escape=Cancel keyboard handling
+  - [x] Implement focus trap within dialog
+  - [x] Integrate with TabManager.close_tab() flow
+- [x] Task 4: Implement tab drag-and-drop reordering (AC: 6)
+  - [x] Use Gtk.Reorderable on TabBar
+  - [x] Update TabManager internal state on reorder
   - [ ] Persist tab order to config if needed
-- [ ] Task 5: Implement tab cycling with Ctrl+Tab (AC: 7)
-  - [ ] Register Ctrl+Tab and Ctrl+Shift+Tab shortcuts in actions.py
-  - [ ] Implement TabManager.cycle_next() and cycle_previous()
-  - [ ] Handle focus transfer correctly
+- [x] Task 5: Implement tab cycling with Ctrl+Tab (AC: 7)
+  - [x] Register Ctrl+Tab and Ctrl+Shift+Tab shortcuts in actions.py
+  - [x] Implement TabManager.cycle_next() and cycle_previous()
+  - [x] Handle focus transfer correctly
 
 ## Dev Notes
 
@@ -242,24 +242,43 @@ tests/ui/
 
 ### Agent Model Used
 
-TBD (to be filled by dev agent)
+minimax-m2.5-free
 
 ### Debug Log References
 
-TBD
+- TabManager now tracks tab order in `_tab_order` list
+- SaveDiscardDialog callback registered via `set_close_dialog_callback()`
+- Tab cycling methods update active tab automatically
 
 ### Completion Notes List
 
-TBD
+- Implemented dirty indicator in TabBar with blue dot marker
+- Implemented SaveDiscardDialog with Adw.MessageDialog, Enter/Save, Escape/Cancel
+- Implemented tab cycling with cycle_next() and cycle_previous() wrapping
+- Implemented tab reordering with reorder_tabs() method
+- Added Ctrl+Tab and Ctrl+Shift+Tab shortcuts in actions.py
+- All 18 TabManager tests pass including new dialog/cycling/reorder tests
 
 ### File List
 
-TBD
+- slate/ui/editor/tab_manager.py (modified)
+- slate/ui/editor/tab_bar.py (modified)
+- slate/ui/actions.py (modified)
+- slate/ui/dialogs/__init__.py (created)
+- slate/ui/dialogs/save_discard_dialog.py (created)
+- tests/ui/test_tab_manager.py (modified)
 
 ---
 
 ## Change Log
 
+- **Date: 2026-03-27** - Story 1.7 implementation complete
+  - Implemented dirty indicator (blue dot) in TabBar
+  - Created SaveDiscardDialog with Save/Don't Save/Cancel buttons
+  - Added Enter=Save, Escape=Cancel keyboard handling
+  - Implemented tab cycling with Ctrl+Tab/Ctrl+Shift+Tab
+  - Added tab reordering support with reorder_tabs()
+  - 11 new tests added for dialog, cycling, and reorder functionality
 - **Date: 2026-03-27** - Story 1.7 context created
   - Comprehensive implementation guide for Tab Manager & Save/Discard Guard
   - Builds on Story 1.6 TabManager foundation

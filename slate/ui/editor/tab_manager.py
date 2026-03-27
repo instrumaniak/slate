@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from slate.core.event_bus import EventBus
@@ -21,7 +23,7 @@ class TabManager:
     Service ID for FileService: "file"
     """
 
-    def __init__(self, file_service: "FileService") -> None:
+    def __init__(self, file_service: FileService) -> None:
         """Initialize TabManager.
 
         Args:
@@ -30,9 +32,19 @@ class TabManager:
         self._file_service = file_service
         self._tabs: dict[str, dict] = {}
         self._active_tab: str | None = None
+        self._tab_order: list[str] = []
+        self._close_dialog_callback: Callable | None = None
 
         self._event_bus = EventBus()
         self._event_bus.subscribe(OpenFileRequestedEvent, self._on_open_file_requested)
+
+    def set_close_dialog_callback(self, callback: Callable[[str, str], str]) -> None:
+        """Set callback for showing save/discard dialog.
+
+        Args:
+            callback: Function that takes (filename, path) and returns "save"|"discard"|"cancel"
+        """
+        self._close_dialog_callback = callback
 
     def _on_open_file_requested(self, event: OpenFileRequestedEvent) -> None:
         """Handle OpenFileRequestedEvent - create new tab."""
@@ -74,26 +86,48 @@ class TabManager:
         }
         self._tabs[path] = tab
         self._active_tab = path
+        self._tab_order.append(path)
 
         self._event_bus.emit(FileOpenedEvent(path=path, content=content))
 
         return tab
 
-    def close_tab(self, path: str) -> None:
+    def close_tab(self, path: str) -> bool:
         """Close a tab.
 
         Args:
             path: Path of the tab to close.
+
+        Returns:
+            True if tab was closed, False if cancelled or not found.
         """
         if path not in self._tabs:
-            return
+            return False
+
+        tab = self._tabs[path]
+        if tab.get("is_dirty", False) and self._close_dialog_callback:
+            filename = os.path.basename(path)
+            result = self._close_dialog_callback(filename, path)
+            if result == "cancel":
+                return False
+            if result == "save":
+                try:
+                    content = tab.get("content", "")
+                    self._file_service.write_file(path, content)
+                    self.mark_clean(path)
+                except Exception as e:
+                    logger.error(f"Failed to save file {path}: {e}")
+                    return False
 
         del self._tabs[path]
+        if path in self._tab_order:
+            self._tab_order.remove(path)
 
         if self._active_tab == path:
             self._active_tab = next(iter(self._tabs), None)
 
         self._event_bus.emit(TabClosedEvent(path=path))
+        return True
 
     def get_tabs(self) -> dict[str, dict]:
         """Get all open tabs.
@@ -144,4 +178,50 @@ class TabManager:
         Returns:
             List of file paths for open tabs.
         """
-        return list(self._tabs.keys())
+        return self._tab_order.copy() if self._tab_order else list(self._tabs.keys())
+
+    def cycle_next(self) -> str | None:
+        """Cycle to the next tab.
+
+        Returns:
+            Path of the newly active tab, or None if no tabs.
+        """
+        if not self._tab_order:
+            return None
+
+        current_index = (
+            self._tab_order.index(self._active_tab) if self._active_tab in self._tab_order else -1
+        )
+        next_index = (current_index + 1) % len(self._tab_order)
+        next_path = self._tab_order[next_index]
+        self._active_tab = next_path
+        return next_path
+
+    def cycle_previous(self) -> str | None:
+        """Cycle to the previous tab.
+
+        Returns:
+            Path of the newly active tab, or None if no tabs.
+        """
+        if not self._tab_order:
+            return None
+
+        current_index = (
+            self._tab_order.index(self._active_tab) if self._active_tab in self._tab_order else 0
+        )
+        prev_index = (current_index - 1) % len(self._tab_order)
+        prev_path = self._tab_order[prev_index]
+        self._active_tab = prev_path
+        return prev_path
+
+    def reorder_tabs(self, new_order: list[str]) -> None:
+        """Reorder tabs.
+
+        Args:
+            new_order: New order of tab paths.
+        """
+        if set(new_order) != set(self._tabs.keys()):
+            logger.warning("Reorder request doesn't match existing tabs")
+            return
+
+        self._tab_order = new_order
