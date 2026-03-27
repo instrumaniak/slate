@@ -47,6 +47,7 @@ class SlateWindow(Adw.ApplicationWindow):
         from slate.ui.editor.tab_manager import TabManager
 
         self._tab_manager = TabManager(file_service)
+        self._tab_manager.set_close_dialog_callback(self._show_close_dialog)
 
         self._setup_window_geometry()
         self._apply_theme()
@@ -167,17 +168,16 @@ class SlateWindow(Adw.ApplicationWindow):
 
     def _on_tab_close_requested(self, tab_bar, path: str) -> None:
         """Handle tab close request."""
-        tab = self._tab_manager.get_tabs().get(path)
-        if tab and "editor_view" in tab:
-            editor_view = tab["editor_view"]
-            if self._editor_scroll.get_child() is editor_view:
+        closed = self._tab_manager.close_tab(path)
+        if closed:
+            tab = self._tab_manager.get_tabs().get(path, {})
+            editor_view = tab.pop("editor_view", None)
+            if editor_view and self._editor_scroll.get_child() is editor_view:
                 self._editor_scroll.set_child(None)
-            del tab["editor_view"]
-        self._tab_manager.close_tab(path)
-        self._tab_bar.remove_tab(path)
+            self._tab_bar.remove_tab(path)
 
-        if not self._tab_manager.get_tabs():
-            self._editor_scroll.set_child(None)
+            if not self._tab_manager.get_tabs():
+                self._editor_scroll.set_child(None)
 
     def _update_editor_for_tab(self, path: str) -> None:
         """Update editor container to show the selected tab's editor."""
@@ -202,12 +202,32 @@ class SlateWindow(Adw.ApplicationWindow):
         editor_view = EditorView(
             path=path,
             content=tab.get("content", ""),
+            on_modified_changed=lambda dirty, p=path: self._on_editor_modified(p, dirty),
         )
 
         tab["editor_view"] = editor_view
 
         if editor_view:
             self._editor_scroll.set_child(editor_view)
+
+    def _on_editor_modified(self, path: str, is_dirty: bool) -> None:
+        """Handle editor buffer modified state change."""
+        if is_dirty:
+            self._tab_manager.mark_dirty(path)
+        else:
+            self._tab_manager.mark_clean(path)
+        self._tab_bar.set_dirty(path, is_dirty)
+
+    def _show_close_dialog(self, filename: str, path: str) -> str:
+        """Show save/discard dialog for a dirty tab.
+
+        Returns:
+            "save", "discard", or "cancel"
+        """
+        from slate.ui.dialogs.save_discard_dialog import SaveDiscardDialog
+
+        dialog = SaveDiscardDialog(self, filename)
+        return dialog.run()
 
     def _register_shortcuts(self) -> None:
         # Register Gio.SimpleAction shortcuts (no ShortcutController to avoid

@@ -9,19 +9,18 @@ try:
     import gi
 
     gi.require_version("Gtk", "4.0")
-    gi.require_version("Adw", "1")
-    from gi.repository import Adw, GLib, Gtk
+    from gi.repository import GLib, Gtk
 
     GTK_AVAILABLE = True
 except (ImportError, ValueError):
     GTK_AVAILABLE = False
-    Adw = Gtk = GLib = None
+    Gtk = GLib = None
 
 
 class SaveDiscardDialog:
     """Save/Don't Save/Cancel dialog for dirty tabs.
 
-    Uses Adw.MessageDialog for GTK4/Adwaita consistency.
+    Uses Gtk.Dialog for broad GTK4 compatibility.
     Returns: "save" | "discard" | "cancel"
     """
 
@@ -41,22 +40,35 @@ class SaveDiscardDialog:
         self._filename = filename
         self._result: str | None = None
         self._main_loop: GLib.MainLoop | None = None
+
         self._response_map = {
-            "save": "save",
-            "discard": "discard",
-            "cancel": "cancel",
+            Gtk.ResponseType.YES: "save",
+            Gtk.ResponseType.NO: "discard",
+            Gtk.ResponseType.CANCEL: "cancel",
         }
 
-        self._dialog = Adw.MessageDialog.new(
-            parent,
-            f"Save changes to '{filename}'?",
-            "Your changes will be lost if you don't save them.",
-        )
+        self._dialog = Gtk.Dialog()
+        self._dialog.set_transient_for(parent)
+        self._dialog.set_modal(True)
+        self._dialog.set_title(f"Save changes to '{filename}'?")
+        self._dialog.set_default_size(400, -1)
+        self._dialog.add_button("Don't Save", Gtk.ResponseType.NO)
+        self._dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        self._dialog.add_button("Save", Gtk.ResponseType.YES)
 
-        self._dialog.add_button("Don't Save", "discard")
-        self._dialog.add_button("Cancel", "cancel")
-        save_button = self._dialog.add_button("Save", "save")
-        save_button.set_css_classes(["suggested-action"])
+        save_btn = self._dialog.get_widget_for_response(Gtk.ResponseType.YES)
+        if save_btn:
+            save_btn.set_css_classes(["suggested-action"])
+
+        self._dialog.set_default_response(Gtk.ResponseType.YES)
+
+        content_area = self._dialog.get_content_area()
+        label = Gtk.Label(label="Your changes will be lost if you don't save them.")
+        label.set_margin_top(8)
+        label.set_margin_bottom(16)
+        label.set_margin_start(16)
+        label.set_margin_end(16)
+        content_area.append(label)
 
         self._dialog.connect("response", self._on_response)
         self._setup_keyboard_handling()
@@ -87,21 +99,21 @@ class SaveDiscardDialog:
         from gi.repository import Gdk
 
         if keyval == Gdk.KEY_Return or keyval == Gdk.KEY_KP_Enter:
-            self._dialog.response("save")
+            self._dialog.response(Gtk.ResponseType.YES)
             return True
         elif keyval == Gdk.KEY_Escape:
-            self._dialog.response("cancel")
+            self._dialog.response(Gtk.ResponseType.CANCEL)
             return True
         return False
 
-    def _on_response(self, dialog: Adw.MessageDialog, response: str) -> None:
+    def _on_response(self, dialog: Gtk.Dialog, response_id: int) -> None:
         """Handle dialog response.
 
         Args:
-            dialog: The message dialog.
-            response: The response ID.
+            dialog: The dialog.
+            response_id: The response type.
         """
-        self._result = self._response_map.get(response, "cancel")
+        self._result = self._response_map.get(response_id, "cancel")
         self._dialog.hide()
         if self._main_loop and self._main_loop.is_running():
             self._main_loop.quit()

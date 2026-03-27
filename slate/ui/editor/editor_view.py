@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ class EditorView(GtkSource.View if GTK_AVAILABLE else object):
         path: str,
         content: str,
         editor_scheme: str = "Adwaita",
+        on_modified_changed: Callable[[bool], None] | None = None,
     ) -> None:
         """Initialize EditorView."""
         if not EditorView._gtk_available:
@@ -36,6 +38,8 @@ class EditorView(GtkSource.View if GTK_AVAILABLE else object):
             self._buffer = None
             return
 
+        self._on_modified_changed = on_modified_changed
+
         from slate.ui.editor.editor_factory import EditorViewFactory
 
         factory = EditorViewFactory()
@@ -44,9 +48,15 @@ class EditorView(GtkSource.View if GTK_AVAILABLE else object):
         buffer = factory.create_buffer(content, language_id)
         super().__init__(buffer=buffer)
 
+        buffer.connect("modified-changed", self._on_buffer_modified)
         factory.apply_scheme(buffer, editor_scheme)
 
         self._setup_basic_properties()
+
+    def _on_buffer_modified(self, buffer) -> None:
+        """Handle buffer modified state change."""
+        if self._on_modified_changed:
+            self._on_modified_changed(buffer.get_modified())
 
     def _setup_basic_properties(self) -> None:
         """Configure basic editor properties."""
