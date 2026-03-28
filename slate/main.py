@@ -2,6 +2,7 @@
 
 import sys
 
+from slate.ui.app import main as app_main
 from slate.version import __version__
 
 
@@ -16,7 +17,7 @@ def main() -> int:
         return 1
 
     print(f"Slate v{__version__}")
-    return 0
+    return app_main()
 
 
 if __name__ == "__main__":

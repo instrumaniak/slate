@@ -6,21 +6,26 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from slate.services.config_service import ConfigService
     from slate.services.theme_service import ThemeService
-    from slate.services.file_service import FileService
-    from slate.ui.editor.tab_manager import TabManager
 
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Gtk, Adw, Gio
+from gi.repository import Adw, Gio, Gtk
 
 logger = logging.getLogger(__name__)
 
 
-def create_main_window(app, config_service, theme_service):
-    """Factory function to create main window."""
-    return SlateWindow(app, config_service, theme_service)
+def create_main_window(app, config_service, theme_service, test_mode: bool = False):
+    """Factory function to create main window.
+
+    Args:
+        app: The application instance.
+        config_service: The config service.
+        theme_service: The theme service.
+        test_mode: If True, set accessible names for testing.
+    """
+    return SlateWindow(app, config_service, theme_service, test_mode=test_mode)
 
 
 class SlateWindow(Adw.ApplicationWindow):
@@ -29,13 +34,26 @@ class SlateWindow(Adw.ApplicationWindow):
     def __init__(
         self,
         app: Adw.Application,
-        config_service: "ConfigService",
-        theme_service: "ThemeService",
+        config_service: ConfigService,
+        theme_service: ThemeService,
+        test_mode: bool = False,
     ) -> None:
-        """Initialize SlateWindow."""
+        """Initialize SlateWindow.
+
+        Args:
+            app: The application instance.
+            config_service: The config service.
+            theme_service: The theme service.
+            test_mode: If True, set accessible names for testing.
+        """
         super().__init__(application=app)
 
+        self._test_mode = test_mode
+
         self.set_decorated(True)
+
+        if self._test_mode:
+            self._set_accessible_names()
 
         self._config_service = config_service
         self._theme_service = theme_service
@@ -53,6 +71,24 @@ class SlateWindow(Adw.ApplicationWindow):
         self._apply_theme()
         self._setup_main_layout()
         self._register_shortcuts()
+
+    def _set_accessible_names(self) -> None:
+        """Set accessible names for test automation."""
+        try:
+            accessible = self.get_accessible()
+            if accessible:
+                accessible.set_name("slate-main-window")
+        except (AttributeError, TypeError):
+            pass
+
+    def _try_set_accessible_name(self, widget, name: str) -> None:
+        """Try to set accessible name on a widget, silently fail if not supported."""
+        try:
+            accessible = widget.get_accessible()
+            if accessible:
+                accessible.set_name(name)
+        except (AttributeError, TypeError):
+            pass
 
     def _setup_window_geometry(self) -> None:
         """Load and apply window dimensions from config."""
@@ -86,6 +122,9 @@ class SlateWindow(Adw.ApplicationWindow):
         header = Adw.HeaderBar()
         header.set_show_start_title_buttons(False)
         header.set_show_end_title_buttons(True)
+
+        if self._test_mode:
+            self._try_set_accessible_name(header, "slate-headerbar")
 
         title_label = Gtk.Label(label="Slate")
         title_label.set_css_classes(["title"])
@@ -133,6 +172,9 @@ class SlateWindow(Adw.ApplicationWindow):
         side_panel.set_hexpand(False)
         side_panel.set_css_classes(["sidebar"])
 
+        if self._test_mode:
+            self._try_set_accessible_name(side_panel, "slate-side-panel")
+
         placeholder = Gtk.Label(label="Side Panel\n(Future: File Explorer)")
         placeholder.set_vexpand(True)
         side_panel.append(placeholder)
@@ -147,9 +189,16 @@ class SlateWindow(Adw.ApplicationWindow):
         editor_area.set_hexpand(True)
         editor_area.set_vexpand(True)
 
+        if self._test_mode:
+            self._try_set_accessible_name(editor_area, "slate-editor-area")
+
         self._tab_bar = TabBar()
         self._tab_bar.connect("tab-selected", self._on_tab_selected)
         self._tab_bar.connect("tab-close-requested", self._on_tab_close_requested)
+
+        if self._test_mode:
+            self._try_set_accessible_name(self._tab_bar, "slate-tab-bar")
+
         editor_area.append(self._tab_bar)
 
         self._editor_scroll = Gtk.ScrolledWindow()
