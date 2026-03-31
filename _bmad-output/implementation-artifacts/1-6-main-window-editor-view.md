@@ -168,10 +168,10 @@ So that I can open, edit, and save files with syntax highlighting.
 
 **Main Window Contract (SlateWindow):**
 ```python
-class SlateWindow(Adw.ApplicationWindow):
-    """Main application window with GTK4/Adwaita."""
+class SlateWindow(Gtk.ApplicationWindow):
+    """Main application window with GTK4."""
 
-    def __init__(self, app: Adw.Application):
+    def __init__(self, app: Gtk.Application):
         # Load window geometry from config
         # Apply theme before presenting (ThemeService)
         # Register keyboard shortcuts
@@ -238,7 +238,7 @@ class TabManager:
 ### Architecture Compliance Checklist
 
 - [ ] UI layer imports only from core/ and services/
-- [ ] Main window uses Adw.ApplicationWindow (GTK4/Adwaita)
+- [ ] Main window uses Gtk.ApplicationWindow (GTK4)
 - [ ] ThemeService runs BEFORE window presentation (no theme flash)
 - [ ] TabManager is ONLY component creating tabs and emitting FileOpenedEvent
 - [ ] EditorViewFactory used for GtkSource.View configuration
@@ -256,7 +256,7 @@ class TabManager:
 **System Dependencies:**
 ```
 python3-gi python3-gi-cairo
-gir1.2-gtk-4.0 gir1.2-gtksource-5 gir1.2-adw-1
+gir1.2-gtk-4.0 gir1.2-gtksource-5
 ```
 
 ### File Structure Requirements

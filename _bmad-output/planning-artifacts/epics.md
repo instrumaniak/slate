@@ -84,7 +84,7 @@ NFR-011: At least one custom plugin shall be written using the public API within
 - GitHub Actions CI workflow (.github/workflows/ci.yml)
 - Makefile for development shortcuts
 - Scripts: install-deps.sh, run-tests.sh, lint.sh
-- System dependencies (apt): python3-gi, python3-gi-cairo, gir1.2-gtk-4.0, gir1.2-gtksource-5, gir1.2-adw-1, git, ripgrep
+- System dependencies (apt): python3-gi, python3-gi-cairo, gir1.2-gtk-4.0, gir1.2-gtksource-5, git, ripgrep
 - Python 3.10+ required with explicit version check in main.py
 - XDG symbolic icons for activity bar (folder-symbolic, system-search-symbolic, vcs-changed-symbolic)
 
@@ -537,7 +537,7 @@ So that I can customize font, tab width, and indentation.
 **Acceptance Criteria:**
 
 **Given** PreferencesPlugin is implemented
-**When** I open Preferences (Ctrl+,), an Adw.PreferencesWindow is displayed
+**When** I open Preferences (Ctrl+,), a Preferences dialog (Gtk.Dialog with Gtk.Notebook) is displayed
 **And** Editor page shows: Font, Tab Width, Insert Spaces, Show Line Numbers, Highlight Current Line, Word Wrap, Auto-indent
 **And** all editor settings apply immediately (live preview)
 **And** settings persist to ~/.config/slate/config.ini via ConfigService
@@ -624,7 +624,7 @@ So that I can fix issues without losing the rest of the editor.
 
 **Given** a plugin has a syntax error or import failure
 **When** Slate attempts to activate it, the error is logged and the plugin is skipped
-**And** an error notification (Adw.Toast) is shown in the UI with the plugin ID and error summary
+**And** an error notification (SlateToast) is shown in the UI with the plugin ID and error summary
 **Given** a plugin raises an exception during runtime (after activation)
 **When** the exception occurs, it is caught by the host bridge and does not crash Slate
 **And** the error is logged to stderr with the plugin ID and exception details

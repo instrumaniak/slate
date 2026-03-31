@@ -11,18 +11,17 @@ try:
     import gi
 
     gi.require_version("Gtk", "4.0")
-    gi.require_version("Adw", "1")
     gi.require_version("GtkSource", "5")
-    from gi.repository import Adw, Gio
+    from gi.repository import Gio, Gtk
 
     GTK_AVAILABLE = True
 except (ImportError, ValueError) as e:
     print(f"Missing required GTK components: {e}", file=sys.stderr)
-    print("Install: python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-gtksource-5", file=sys.stderr)
+    print("Install: python3-gi gir1.2-gtk-4.0 gir1.2-gtksource-5", file=sys.stderr)
     sys.exit(1)
 
 
-class SlateApplication(Adw.Application):
+class SlateApplication(Gtk.Application):
     """Main application class - composition root.
 
     All dependency injection wiring happens here.
@@ -75,7 +74,7 @@ class SlateApplication(Adw.Application):
         sys.stderr.flush()
         return False
 
-    def _on_activate(self, app: Adw.Application) -> None:
+    def _on_activate(self, app: Gtk.Application) -> None:
         """Handle application activation."""
         from slate.services import get_config_service, get_file_service, get_theme_service
         from slate.ui.main_window import create_main_window

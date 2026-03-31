@@ -198,7 +198,7 @@ class TestThemeServiceSetColorMode:
 
 
 class TestThemeServiceSystemDetection:
-    """Test system theme detection."""
+    """Test system theme detection using Gtk.Settings."""
 
     def test_detect_system_theme_returns_boolean(self):
         """System detection should return a boolean."""
@@ -213,74 +213,51 @@ class TestThemeServiceSystemDetection:
         # Result should be a boolean (True for dark, False for light)
         assert isinstance(result, bool)
 
-    def test_detect_system_theme_with_adw_prefer_dark(self):
-        """Should detect dark when Adw.ColorScheme.PREFER_DARK."""
+    def test_detect_system_theme_with_gtk_dark(self):
+        """Should detect dark when Gtk.Settings prefers dark theme."""
         mock_config = Mock()
         mock_config.get.return_value = "system"
 
         service = ThemeService(config_service=mock_config)
 
-        # Mock at the service level to simulate Adwaita returning dark
+        # Directly test the method - mock at the service level
         with patch.object(service, "_detect_system_theme", return_value=True):
             result = service._detect_system_theme()
             assert result is True
 
-    def test_detect_system_theme_with_adw_prefer_light(self):
-        """Should detect light when Adw.ColorScheme.PREFER_LIGHT."""
+    def test_detect_system_theme_with_gtk_light(self):
+        """Should detect light when Gtk.Settings does not prefer dark."""
         mock_config = Mock()
         mock_config.get.return_value = "system"
 
-        service = ThemeService(config_service=mock_config)
-
-        # Mock at the service level to simulate Adwaita returning light
-        with patch.object(service, "_detect_system_theme", return_value=False):
-            result = service._detect_system_theme()
-            assert result is False
-
-    def test_detect_system_theme_fallback_to_gtk(self):
-        """Should fallback to Gtk.Settings when Adwaita unavailable."""
-        mock_config = Mock()
-        mock_config.get.return_value = "system"
+        mock_settings = MagicMock()
+        mock_settings.get_property.return_value = False
 
         service = ThemeService(config_service=mock_config)
 
-        # Mock the method to simulate GTK fallback returning dark
-        with patch.object(service, "_detect_system_theme", return_value=True):
-            result = service._detect_system_theme()
-            assert result is True
-
-    def test_graceful_fallback_when_adw_style_manager_none(self):
-        """Should fallback when Adw.StyleManager.get_default() returns None."""
-        mock_config = Mock()
-        mock_config.get.return_value = "system"
-
-        mock_adw = MagicMock()
-        mock_adw.StyleManager.get_default.return_value = None
-
-        service = ThemeService(config_service=mock_config)
-
-        with patch.dict("sys.modules", {"gi.repository.Adw": mock_adw}):
-            with patch("gi.require_version"):
+        with patch("gi.require_version"):
+            with patch.dict(
+                "sys.modules",
+                {
+                    "gi.repository.Gtk": MagicMock(
+                        Settings=MagicMock(get_default=MagicMock(return_value=mock_settings))
+                    )
+                },
+            ):
                 result = service._detect_system_theme()
-                # Should fallback to GTK or return False
-                assert isinstance(result, bool)
+                assert result is False
 
-    def test_graceful_fallback_when_gtk_settings_none(self):
+    def test_graceful_when_gtk_settings_none(self):
         """Should return False when Gtk.Settings.get_default() returns None."""
         mock_config = Mock()
         mock_config.get.return_value = "system"
-
-        mock_adw = MagicMock()
-        mock_adw.StyleManager.get_default.side_effect = ImportError("No Adw")
 
         mock_gtk = MagicMock()
         mock_gtk.Settings.get_default.return_value = None
 
         service = ThemeService(config_service=mock_config)
 
-        with patch.dict(
-            "sys.modules", {"gi.repository.Adw": mock_adw, "gi.repository.Gtk": mock_gtk}
-        ):
+        with patch.dict("sys.modules", {"gi.repository.Gtk": mock_gtk}):
             with patch("gi.require_version"):
                 result = service._detect_system_theme()
                 assert result is False
@@ -491,4 +468,3 @@ class TestThemeServiceEventBus:
                 service.set_color_mode("dark")
             except Exception as e:
                 pytest.fail(f"set_color_mode should not raise on EventBus error: {e}")
-

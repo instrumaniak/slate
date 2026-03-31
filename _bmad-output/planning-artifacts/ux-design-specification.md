@@ -49,14 +49,14 @@ Slate's core experience centers on the code review cycle: open file → navigate
 
 - **Platform**: Desktop app (Linux/Ubuntu 22.04+)
 - **Input**: Mouse + keyboard (VSCode-like shortcuts)
-- **Framework**: Python + GTK4/Adwaita
+- **Framework**: Python + GTK4
 - **Offline**: Fully offline capable, no network required
 
 ### Effortless Interactions
 
 - Instant launch (<2s cold start)
 - Zero-lag file navigation and search
-- Zero-config theme inheritance (GTK4/Adwaita auto-detect)
+- Zero-config theme inheritance (GTK4 auto-detect via Gtk.Settings)
 - Tab management with dirty indicators and save guards
 - Complete git workflow (status → diff → stage → commit) in-panel
 
@@ -122,8 +122,8 @@ Secondary emotional targets:
    - Sub-2-second startup as baseline expectation
    - Minimal UI chrome, focus on code
 
-3. **GTK4/Adwaita** — Platform-native design:
-   - System theme inheritance (light/dark auto-switch)
+3. **GTK4** — Platform-native design:
+   - System theme inheritance via Gtk.Settings (light/dark auto-switch)
    - Native GTK4 widgets
    - GNOME desktop consistency
 
@@ -146,7 +146,7 @@ Secondary emotional targets:
 
 **What to Adopt:**
 - VSCode UX patterns (panels, shortcuts, layout)
-- GTK4/Adwaita for native Linux feel
+- GTK4 for native Linux feel
 
 **What to Adapt:**
 - VSCode complexity → simplify for lightweight feel
@@ -161,12 +161,12 @@ Secondary emotional targets:
 
 ### Design System Choice
 
-**GTK4/Adwaita** — The native GNOME/Linux platform design system. Slate uses GTK4 for all UI components and Adwaita for visual styling.
+**GTK4** — The native Linux platform design system. Slate uses GTK4 for all UI components.
 
 ### Rationale for Selection
 
 - **Native integration**: GTK4 is the standard Linux desktop UI framework
-- **System theme inheritance**: Adwaita automatically matches system light/dark preference
+- **System theme inheritance**: GTK4 automatically matches system light/dark preference via Gtk.Settings
 - **Zero setup**: No custom theme configuration required — works out of the box
 - **Performance**: Native widgets have minimal overhead vs. custom UI layers
 - **Familiarity**: Ubuntu/GNOME users already know this visual language
@@ -176,15 +176,15 @@ Secondary emotional targets:
 
 - Use GTK4 `ApplicationWindow`, `HeaderBar`, `Sidebar` for main layout
 - GtkSourceView 5 for editor component with custom syntax highlighting
-- Adwaita CSS classes for standard widgets
+- GTK4 CSS classes for standard widgets
 - Custom CSS overlay for editor-specific theming
 - GAction-based menu system following GNOME conventions
 
 ### Customization Strategy
 
 - **Editor theming**: Custom GtkSourceView style schemes (monokai, solarized, etc.)
-- **Panel styling**: Minimal custom CSS to match VSCode-like layout within Adwaita
-- **Activity bar icons**: XDG symbolic icons following Adwaita conventions
+- **Panel styling**: Minimal custom CSS to match VSCode-like layout
+- **Activity bar icons**: XDG symbolic icons
 - **Syntax highlighting**: Predefined color schemes via GtkSourceView
 
 ## 2. Core User Experience
@@ -438,7 +438,7 @@ Across these flows, common patterns emerge:
 
 ### Design System Components
 
-**Available from GTK4/Adwaita:**
+**Available from GTK4:**
 
 | Component | Usage |
 |-----------|-------|

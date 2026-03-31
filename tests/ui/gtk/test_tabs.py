@@ -6,11 +6,15 @@ from gi.repository import Gtk
 def test_tab_bar_exists(gtk_app_activated):
     """Tab bar should exist in the editor area."""
     window = gtk_app_activated
-    content = window.get_content()
+    content = window.get_child()
 
-    paned = content.get_first_child()
-    while paned and not isinstance(paned, Gtk.Paned):
-        paned = paned.get_next_sibling()
+    paned = None
+    child_iter = content.get_first_child()
+    while child_iter:
+        if isinstance(child_iter, Gtk.Paned):
+            paned = child_iter
+            break
+        child_iter = child_iter.get_next_sibling()
 
     assert paned is not None
 

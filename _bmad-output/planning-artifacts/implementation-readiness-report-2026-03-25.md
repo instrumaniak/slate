@@ -112,7 +112,7 @@ filesIncluded:
 
 - **Constraints:**
   - Platform: Ubuntu/Linux 22.04+ only (no Windows/macOS in v1)
-  - Dependencies: python3, python3-gi, gir1.2-gtk-4.0, gir1.2-gtksource-5, gir1.2-adw-1, git, ripgrep
+  - Dependencies: python3, python3-gi, gir1.2-gtk-4.0, gir1.2-gtksource-5, git, ripgrep
   - Python: 3.10+, PyGObject >= 3.44, gitpython >= 3.1
 
 ### PRD Completeness Assessment

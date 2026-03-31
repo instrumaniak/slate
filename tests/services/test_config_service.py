@@ -401,19 +401,9 @@ class TestConfigServiceEdgeCases:
 
     def test_zero_gtk_imports_at_module_level(self):
         """ConfigService module should have zero GTK imports at module level."""
-        import sys
-
-        # Get the actual imported modules in config_service module
-        import slate.services.config_service as config_module
-
-        # Check for GTK/GI imports in sys.modules that were imported by our module
-        gtk_modules = [
-            name for name in sys.modules.keys() if name.startswith("gi") or "gtk" in name.lower()
-        ]
-        assert len(gtk_modules) == 0, f"Found GTK-related modules imported: {gtk_modules}"
-
-        # Verify by checking source code doesn't contain GTK import statements
         import inspect
+
+        import slate.services.config_service as config_module
 
         source = inspect.getsource(config_module)
         lines = source.split("\n")

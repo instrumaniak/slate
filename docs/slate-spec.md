@@ -973,7 +973,7 @@ Theme behavior is a cross-cutting concern and must not be split across random wi
 - startup theme bootstrap from persisted config before the first window is presented
 - emitting `ThemeChangedEvent`
 
-GTK/libadwaita runtime application stays in the UI layer via a small helper such as `ui/theme_manager.py`, but the policy and config rules live in the service layer.
+GTK4 runtime application stays in the UI layer via a small helper such as `ui/theme_manager.py`, but the policy and config rules live in the service layer.
 
 #### Minimal Service APIs (implementation contract)
 
@@ -1462,7 +1462,7 @@ slate/
 │                                           ← Uses lazy import: import GtkSource in methods only
 │
 ├── ui/                                  ← GTK widgets; depends on services + core only
-│   ├── app.py                           ← Adw.Application; composition root; all DI wiring
+│   ├── app.py                           ← Gtk.Application; composition root; all DI wiring
 │   ├── theme_manager.py                 ← applies ThemeService state to Adw/Gtk CSS providers
 │   ├── window.py                        ← SlateWindow; layout skeleton only
 │   ├── plugin_host.py                   ← HostUIBridge implementation for panels/actions/dialogs
@@ -1490,7 +1490,7 @@ slate/
         │   └── widgets.py               ← ChangedFilesList, DiffView, CommitBar
         └── preferences/
             ├── __init__.py              ← PreferencesPlugin(AbstractPlugin)
-            └── dialog.py                ← Adw.PreferencesWindow
+            └── dialog.py                ← Gtk.Dialog + Gtk.Notebook (Preferences)
 ```
 
 ---
@@ -1501,7 +1501,7 @@ All wiring happens in `ui/app.py`. No class instantiates its own dependencies.
 
 ```python
 # ui/app.py — composition root
-class SlateApplication(Adw.Application):
+class SlateApplication(Gtk.Application):
     def do_activate(self):
         # Core
         event_bus    = EventBus()
@@ -1630,7 +1630,7 @@ class PluginHostBridge(HostUIBridge):
   
 - **ThemeManager** (UI layer):
   - Applies CSS providers to widgets
-  - Updates Adw.Application color scheme
+  - Updates Gtk.Settings color scheme
   - Listens to `ThemeChangedEvent` and calls `EditorView.apply_theme()` on all open views
 
 ```python
@@ -1711,7 +1711,7 @@ class ConfigError(SlateError):
     pass
 ```
 
-- UI layer catches at the boundary → `Adw.AlertDialog`. Services never show UI.
+- UI layer catches at the boundary → `Gtk.MessageDialog`. Services never show UI.
 - Plugins show their own errors inline (e.g. "Not a git repository" label in Source Control panel).
 - Plugin `activate()` calls are wrapped in try/except — a failing plugin is skipped with a stderr log; the app continues.
 
@@ -1884,7 +1884,7 @@ For file-opening tests, use event-bus-driven fixtures rather than calling notebo
 |---|---|---|
 | Language | Python 3.10+ | Fast development; deep Linux system integration |
 | GUI Toolkit | GTK4 via PyGObject (`gi.repository.Gtk`) | Native theme inheritance; system library |
-| HIG Shell | libadwaita (`gi.repository.Adw`) | Automatic Adwaita theme; dark mode API |
+| HIG Shell | GTK4 (`gi.repository.Gtk`) | Native GTK4 theme; dark mode via Gtk.Settings |
 | Syntax Highlighting | GtkSourceView 5 (`gi.repository.GtkSource`) | GTK-native; zero extra deps |
 | File Watching | `Gio.FileMonitor` | Native inotify; no polling |
 | Git | `gitpython` (PyPI) + system `git` binary | Pythonic; leverages installed git |
@@ -1894,7 +1894,7 @@ For file-opening tests, use event-bus-driven fixtures rather than calling notebo
 ### System Dependencies (apt)
 ```
 python3  python3-gi  python3-gi-cairo
-gir1.2-gtk-4.0  gir1.2-gtksource-5  gir1.2-adw-1
+gir1.2-gtk-4.0  gir1.2-gtksource-5
 ripgrep  git
 ```
 
@@ -1969,7 +1969,7 @@ if __name__ == "__main__":
 
 ```python
 # ui/app.py - partial
-class SlateApplication(Adw.Application):
+class SlateApplication(Gtk.Application):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._startup_path: str | None = None
@@ -2006,7 +2006,7 @@ Startup path handling rules:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  Slate                                        [🌙]  [⚙]  [_][□][×] │  ← Adw.HeaderBar
+│  Slate                                        [🌙]  [⚙]  [_][□][×] │  ← Gtk.HeaderBar
 ├────┬───────────┬─────────────────────────────────────────────────────┤
 │    │           │  main.py ×  │  index.html ×  │  main.rs ×  │  [+]  │  ← GtkNotebook tabs
 │ 📁 │           ├─────────────────────────────────────────────────────┤
@@ -2054,7 +2054,7 @@ Bar       (220px default,
 
 ### 6.5 Header Bar
 
-- `Adw.HeaderBar` — no traditional menu bar; clean look
+- `Gtk.HeaderBar` — no traditional menu bar; clean look
 - Left: app icon + "Slate"
 - Right: dark mode cycle button (🌙/☀/⊙) + preferences button (⚙)
 - All file/edit actions via keyboard shortcuts only in v1
@@ -2155,7 +2155,7 @@ Shows "Not a git repository" if the open folder has no `.git`.
 - `Gtk.TextView` (multi-line); first line = subject, blank line, body
 - Character counter (72-char soft limit shown in yellow/red)
 - `[Commit]` button: disabled unless staged files + non-empty message
-- On commit: `git commit -m "..."` → clears message, refreshes panel, shows `Adw.Toast`
+- On commit: `git commit -m "..."` → clears message, refreshes panel, shows `SlateToast`
 
 #### Auto-refresh
 - Subscribes to `FileSavedEvent` → refreshes status
@@ -2183,29 +2183,29 @@ Registration contract:
 - `preferences.open` calls `context.get_ui().show_dialog("preferences.window")`
 - the host enforces single-instance presentation of the preferences window for the active main window
 
-`Adw.PreferencesWindow` with two pages:
+`Preferences dialog: Gtk.Dialog with Gtk.Notebook tabs` with two pages:
 
 **Page 1 — Editor**
 
 | Setting | Widget | Default |
 |---|---|---|
 | Font | `Gtk.FontDialogButton` | Monospace 13 |
-| Tab Width | `Adw.SpinRow` (1–8) | 4 |
-| Insert Spaces | `Adw.SwitchRow` | true |
-| Show Line Numbers | `Adw.SwitchRow` | true |
-| Highlight Current Line | `Adw.SwitchRow` | true |
-| Word Wrap | `Adw.SwitchRow` | false |
-| Auto-indent | `Adw.SwitchRow` | true |
+| Tab Width | `Gtk.SpinButton` (1–8) in a labeled row | 4 |
+| Insert Spaces | `Gtk.Switch` in a labeled row | true |
+| Show Line Numbers | `Gtk.Switch` in a labeled row | true |
+| Highlight Current Line | `Gtk.Switch` in a labeled row | true |
+| Word Wrap | `Gtk.Switch` in a labeled row | false |
+| Auto-indent | `Gtk.Switch` in a labeled row | true |
 
 **Page 2 — Appearance**
 
 | Setting | Widget |
 |---|---|
-| Color Mode | `Adw.ComboRow` (System / Light / Dark) |
-| Editor Theme Mode | `Adw.ComboRow` (Auto / Explicit) |
-| Light Scheme | `Adw.ComboRow` (curated GtkSourceView light schemes) |
-| Dark Scheme | `Adw.ComboRow` (curated GtkSourceView dark schemes) |
-| Explicit Scheme | `Adw.ComboRow` (all installed GtkSourceView schemes; enabled only in Explicit mode) |
+| Color Mode | `Gtk.ComboBoxText` (System / Light / Dark) in a labeled row |
+| Editor Theme Mode | `Gtk.ComboBoxText` (Auto / Explicit) in a labeled row |
+| Light Scheme | `Gtk.ComboBoxText` (curated GtkSourceView light schemes) in a labeled row |
+| Dark Scheme | `Gtk.ComboBoxText` (curated GtkSourceView dark schemes) in a labeled row |
+| Explicit Scheme | `Gtk.ComboBoxText` (all installed GtkSourceView schemes; enabled only in Explicit mode) in a labeled row |
 
 All changes apply live (no Apply button). Saves to config immediately.  
 Color mode and scheme changes flow through `ThemeService`, which emits `ThemeChangedEvent` so all open `EditorView` instances update their scheme.
@@ -2221,7 +2221,7 @@ Theme rules:
 
 ### 8.1 Tab Management
 - `GtkNotebook`: scrollable, reorderable tabs
-- Middle-click or × to close; dirty guard: `Adw.AlertDialog` (Save / Discard / Cancel)
+- Middle-click or × to close; dirty guard: `Gtk.MessageDialog` (Save / Discard / Cancel)
 - File changed on disk: `Gio.FileMonitor` triggers "Reload?" dialog on focus-in
 - `Ctrl+B` collapses/restores side panel
 - `Ctrl+T` creates a new untitled tab; first save must route through Save As
@@ -2278,7 +2278,7 @@ All shortcuts registered as `Gio.SimpleAction` in `ui/actions.py`. Plugins add t
 
 ## 9. Theme & Appearance
 
-- `Adw.Application` inherits system GTK4/Adwaita theme automatically — zero custom CSS on the chrome
+- `Gtk.Application` inherits system GTK4 theme automatically — app-specific accents use a small custom CSS layer
 - Theme handling is a dedicated subsystem, not a plugin. `ThemeService` owns theme policy; `PreferencesPlugin` only edits user preferences.
 - Dark mode toggle cycles: System → Light → Dark → System via `ThemeService`, with UI application delegated to `ui/theme_manager.py`
 - `ThemeService` emits `ThemeChangedEvent(color_mode, resolved_is_dark, editor_scheme)` → all open `EditorView` instances switch GtkSourceView scheme
@@ -2364,10 +2364,10 @@ Window restoration rules:
 
 | Situation | Handling |
 |---|---|
-| File not found / permission denied | `Adw.AlertDialog` at the UI boundary; service raises typed exception |
+| File not found / permission denied | `Gtk.MessageDialog` at the UI boundary; service raises typed exception |
 | Git not a repo | Inline "Not a git repository" label in Source Control panel |
-| Git operation failure | Inline red status label in panel; `Adw.Toast` on commit error |
-| Unsaved changes on quit | `Adw.AlertDialog` (Save / Discard / Cancel) |
+| Git operation failure | Inline red status label in panel; `SlateToast` on commit error |
+| Unsaved changes on quit | `Gtk.MessageDialog` (Save / Discard / Cancel) |
 | File changed on disk | `Gio.FileMonitor` → "File changed. Reload?" dialog on focus |
 | Plugin activation failure | Logged to stderr; plugin skipped; app continues |
 

@@ -24,9 +24,9 @@ class ThemeService:
 
     Handles:
     - Color mode resolution (light/dark/system)
-    - System theme detection via GTK/Adwaita
+    - System theme detection via Gtk.Settings
     - Editor color scheme mapping
-    - Theme change event emission
+    - Theme change event emission (live detection via notify signal)
 
     Zero GTK imports at module level - lazy imports inside methods only
     for system theme detection.
@@ -34,7 +34,7 @@ class ThemeService:
     Service ID: "theme" (for PluginContext.get_service())
     """
 
-    def __init__(self, config_service: "ConfigService" | None = None) -> None:
+    def __init__(self, config_service: ConfigService | None = None) -> None:
         """Initialize ThemeService.
 
         Args:
@@ -44,6 +44,8 @@ class ThemeService:
         self._config_service = config_service
         self._mode_change_callbacks: list[Callable[[str, bool, str], None]] = []
         self._lock = threading.RLock()
+        self._theme_watcher_id: int | None = None
+        self._system_theme_watcher_connected = False
 
         # Load saved color mode from config
         self._current_color_mode = self._load_color_mode()
@@ -88,33 +90,14 @@ class ThemeService:
     def _detect_system_theme(self) -> bool:
         """Detect if system prefers dark theme.
 
-        Uses lazy imports to avoid GTK at module level.
-        First tries Adwaita StyleManager, falls back to Gtk.Settings.
+        Uses lazy import to avoid GTK at module level.
+        Reads Gtk.Settings gtk-application-prefer-dark-theme property.
+        Supports live theme change detection via notify signal.
 
         Returns:
             True if system prefers dark theme, False otherwise.
         """
         try:
-            # Try Adwaita first (modern GTK4 approach)
-            import gi
-
-            gi.require_version("Adw", "1")
-            from gi.repository import Adw  # type: ignore[import-untyped]
-
-            style_manager = Adw.StyleManager.get_default()
-            if style_manager is None:
-                raise RuntimeError("Adw.StyleManager.get_default() returned None")
-
-            color_scheme = style_manager.get_color_scheme()
-
-            # Adw.ColorScheme enum values:
-            # 0 = DEFAULT, 1 = PREFER_DARK, 2 = PREFER_LIGHT
-            return bool(color_scheme == Adw.ColorScheme.PREFER_DARK)
-        except (ImportError, AttributeError, RuntimeError) as e:
-            logger.debug(f"Adwaita theme detection failed: {e}")
-
-        try:
-            # Fallback to Gtk.Settings
             import gi
 
             gi.require_version("Gtk", "4.0")
@@ -125,12 +108,58 @@ class ThemeService:
                 logger.debug("Gtk.Settings.get_default() returned None")
                 return False
 
-            return bool(settings.get_property("gtk-application-prefer-dark-theme"))
+            is_dark = bool(settings.get_property("gtk-application-prefer-dark-theme"))
+
+            if not self._system_theme_watcher_connected:
+                self._system_theme_watcher_connected = True
+                self._theme_watcher_id = settings.connect(
+                    "notify::gtk-application-prefer-dark-theme", self._on_system_theme_changed
+                )
+
+            return is_dark
         except (ImportError, AttributeError) as e:
             logger.debug(f"GTK theme detection failed: {e}")
+            return False
 
-        # Default to light if unable to detect
-        return False
+    def _on_system_theme_changed(self, settings, pspec) -> None:
+        """Handle live system theme change."""
+        if self._current_color_mode != "system":
+            return
+
+        try:
+            color_mode, is_dark, editor_scheme = self.resolve_theme()
+            event = ThemeChangedEvent(
+                color_mode=color_mode, resolved_is_dark=is_dark, editor_scheme=editor_scheme
+            )
+            try:
+                EventBus().emit(event)
+            except Exception as e:
+                logger.error(f"Failed to emit ThemeChangedEvent: {e}")
+
+            for callback in list(self._mode_change_callbacks):
+                try:
+                    callback(color_mode, is_dark, editor_scheme)
+                except Exception as e:
+                    logger.warning(f"Theme change callback failed: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to handle system theme change: {e}")
+
+    def shutdown(self) -> None:
+        """Clean up resources."""
+        if self._theme_watcher_id is not None:
+            try:
+                import gi
+
+                gi.require_version("Gtk", "4.0")
+                from gi.repository import Gtk  # type: ignore[import-untyped]
+
+                settings = Gtk.Settings.get_default()
+                if settings is not None:
+                    settings.disconnect(self._theme_watcher_id)
+            except Exception:
+                pass
+            self._theme_watcher_id = None
+        self._system_theme_watcher_connected = False
 
     def set_color_mode(self, mode: str) -> None:
         """Set color mode and persist to config.

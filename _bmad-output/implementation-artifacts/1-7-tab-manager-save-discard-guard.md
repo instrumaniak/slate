@@ -32,7 +32,7 @@ So that I can manage multiple open files and never lose work.
   - [x] Connect click signal to TabManager.close_tab()
 - [x] Task 3: Implement Save/Discard dialog for dirty tabs (AC: 4, 5)
   - [x] Create `slate/ui/dialogs/save_discard_dialog.py`
-  - [x] Implement Adw.MessageDialog with 3 buttons (Save/Don't Save/Cancel)
+  - [x] Implement Gtk.MessageDialog with 3 buttons (Save/Don't Save/Cancel)
   - [x] Handle Enter=Save, Escape=Cancel keyboard handling
   - [x] Implement focus trap within dialog
   - [x] Integrate with TabManager.close_tab() flow
@@ -53,7 +53,7 @@ So that I can manage multiple open files and never lose work.
 
 **Event Ownership:** TabManager is the ONLY component that creates editor tabs and emits FileOpenedEvent. [Source: project-context.md#Event Ownership Rules]
 
-**Dialog Pattern:** SaveDiscardDialog must use Adw.MessageDialog for GTK4/Adwaita consistency. [Source: ux-design-specification.md#UX-DR8]
+**Dialog Pattern:** SaveDiscardDialog must use Gtk.MessageDialog for broad GTK4 compatibility.
 
 ### Previous Story Intelligence
 
@@ -123,7 +123,7 @@ So that I can manage multiple open files and never lose work.
 **ANTI-PATTERNS TO AVOID:**
 - ❌ Never create editor tabs outside TabManager (violates event ownership)
 - ❌ Never emit FileOpenedEvent from dialogs or other components
-- ❌ Never use GTK MessageDialog — use Adw.MessageDialog for GTK4/Adwaita
+- ✅ Use Gtk.MessageDialog — the correct widget for pure GTK4
 - ❌ Never skip focus trap in Save/Discard dialog (accessibility requirement)
 - ❌ Never use hardcoded keyboard shortcuts — all via Gio.SimpleAction
 
@@ -155,9 +155,9 @@ class TabState:
 
 **Save/Discard Dialog Contract:**
 ```python
-class SaveDiscardDialog(Adw.MessageDialog):
+class SaveDiscardDialog(Gtk.Dialog):
     def __init__(self, parent: Gtk.Window, filename: str):
-        # Adw.MessageDialog with 3 buttons
+        # Gtk.Dialog with 3 buttons
         # Response: "save" | "discard" | "cancel"
     
     async def run(self) -> str:
@@ -178,7 +178,7 @@ class SaveDiscardDialog(Adw.MessageDialog):
 
 - [ ] TabManager is ONLY component creating/focusing editor tabs
 - [ ] Dirty indicator shows on TabBar when buffer.get_modified() is True
-- [ ] SaveDiscardDialog uses Adw.MessageDialog with 3 responses
+- [ ] SaveDiscardDialog uses Gtk.Dialog with 3 responses
 - [ ] Enter key = Save, Escape key = Cancel in dialog
 - [ ] Focus trapped in dialog (no Tab out)
 - [ ] Ctrl+Tab cycles forward, Ctrl+Shift+Tab cycles backward
@@ -188,7 +188,7 @@ class SaveDiscardDialog(Adw.MessageDialog):
 ### Library/Framework Requirements
 
 - **PyGObject >= 3.44** — GTK4 bindings
-- **libadwaita (Adw)** — Adw.MessageDialog for save/discard dialog
+- **GTK4** — Gtk.Dialog for save/discard dialog
 
 ### File Structure Requirements
 
@@ -253,7 +253,7 @@ minimax-m2.5-free
 ### Completion Notes List
 
 - Implemented dirty indicator in TabBar with blue dot marker
-- Implemented SaveDiscardDialog with Adw.MessageDialog, Enter/Save, Escape/Cancel
+- Implemented SaveDiscardDialog with Gtk.Dialog, Enter/Save, Escape/Cancel
 - Implemented tab cycling with cycle_next() and cycle_previous() wrapping
 - Implemented tab reordering with reorder_tabs() method
 - Added Ctrl+Tab and Ctrl+Shift+Tab shortcuts in actions.py

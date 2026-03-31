@@ -14,8 +14,7 @@ apt-get install -y \
     python3-gi-cairo \
     python3-pip \
     gir1.2-gtk-4.0 \
-    gir1.2-gtksource-5 \
-    gir1.2-adw-1
+    gir1.2-gtksource-5
 
 # Development tools
 apt-get install -y \

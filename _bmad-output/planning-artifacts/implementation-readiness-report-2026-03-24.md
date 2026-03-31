@@ -96,7 +96,7 @@ Total NFRs: 11
 
 ### Additional Requirements
 
-- Required system packages: `python3`, `python3-gi`, `python3-gi-cairo`, `gir1.2-gtk-4.0`, `gir1.2-gtksource-5`, `gir1.2-adw-1`.
+- Required system packages: `python3`, `python3-gi`, `python3-gi-cairo`, `gir1.2-gtk-4.0`, `gir1.2-gtksource-5`.
 - Required external tools: system `git` and `ripgrep`.
 - Python runtime requirement: Python 3.10+, PyGObject >= 3.44, gitpython >= 3.1.
 - Missing dependencies must fail with actionable messages rather than crashes.
@@ -104,7 +104,7 @@ Total NFRs: 11
 - Search must use `ripgrep` via subprocess with no `os.walk` fallback in v1.
 - Git operations must use system `git` via gitpython.
 - File watching must use GIO `FileMonitor` with native inotify.
-- Theme inheritance depends on GTK4/Adwaita and standard icon theme availability.
+- Theme inheritance depends on GTK4 and standard icon theme availability.
 - CLI startup behavior must support `slate`, `slate .`, `slate /path/to/folder`, and `slate /path/to/file` with defined precedence rules.
 - Application state restoration must restore window geometry and sidebar state, but not tabs in v1.
 - Core keyboard shortcuts are specified for editor, navigation, and plugin panels.

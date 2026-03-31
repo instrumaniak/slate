@@ -47,7 +47,7 @@ Slate comprises 28 functional requirements across 6 domains:
 
 - **Platform:** Linux only (Ubuntu 22.04+)
 - **Runtime:** Python 3.10+, PyGObject >= 3.44
-- **UI Framework:** GTK4, GtkSourceView 5, Adwaita
+- **UI Framework:** GTK4, GtkSourceView 5
 - **System dependencies:** git, ripgrep (via subprocess)
 - **Config storage:** ~/.config/slate/config.ini
 - **No Electron, no JVM, no compile step**
@@ -58,7 +58,7 @@ Slate comprises 28 functional requirements across 6 domains:
 2. **Event-Driven Communication:** EventBus for plugin-to-plugin and plugin-to-host communication
 3. **Native Tool Integration:** Strategy pattern for git/ripgrep — must handle missing tools gracefully
 4. **Testability:** Layered architecture (Core → Service → UI → Plugin) enables 90%+ coverage requirement
-5. **Theme System:** Must inherit GTK4/Adwaita while allowing custom editor color schemes
+5. **Theme System:** Must inherit GTK4 while allowing custom editor color schemes
 
 ## Starter Template Evaluation
 
@@ -223,7 +223,7 @@ mypy (dev)
 **System Dependencies (apt):**
 ```
 python3-gi python3-gi-cairo
-gir1.2-gtk-4.0 gir1.2-gtksource-5 gir1.2-adw-1
+gir1.2-gtk-4.0 gir1.2-gtksource-5
 git ripgrep
 ```
 

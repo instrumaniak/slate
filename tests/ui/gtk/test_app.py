@@ -1,5 +1,5 @@
 import pytest
-from gi.repository import Gtk, Adw
+from gi.repository import Gtk
 
 
 @pytest.mark.timeout(30)
@@ -24,21 +24,21 @@ def test_app_window_has_test_mode(gtk_app_activated):
 def test_app_creates_headerbar(gtk_app_activated):
     """Window should have a header bar."""
     window = gtk_app_activated
-    content = window.get_content()
+    content = window.get_child()
 
     assert content is not None
     assert isinstance(content, Gtk.Box)
 
     header = content.get_first_child()
     assert header is not None
-    assert isinstance(header, Adw.HeaderBar)
+    assert isinstance(header, Gtk.HeaderBar)
 
 
 @pytest.mark.timeout(30)
 def test_app_creates_paned_layout(gtk_app_activated):
     """Window should have paned layout with side panel and editor."""
     window = gtk_app_activated
-    content = window.get_content()
+    content = window.get_child()
 
     box = content.get_first_child()
     while box and not isinstance(box, Gtk.Paned):

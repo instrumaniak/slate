@@ -71,7 +71,7 @@ so that all subsequent features have a solid foundation with correct dependencie
    - [x] `typecheck` target: `mypy slate/`
    - [x] `test` target: `pytest tests/ --cov=slate`
 - [x] Task 8: Create `scripts/install-deps.sh` for system packages
-   - [x] Document apt dependencies: `python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-gtksource-5 gir1.2-adw-1 git ripgrep`
+   - [x] Document apt dependencies: `python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-gtksource-5 git ripgrep`
 
 ## Dev Notes
 
@@ -158,7 +158,7 @@ mypy
 
 ```
 python3 python3-gi python3-gi-cairo
-gir1.2-gtk-4.0 gir1.2-gtksource-5 gir1.2-adw-1
+gir1.2-gtk-4.0 gir1.2-gtksource-5
 git ripgrep
 ```
 

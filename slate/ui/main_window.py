@@ -10,8 +10,7 @@ if TYPE_CHECKING:
 import gi
 
 gi.require_version("Gtk", "4.0")
-gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, Gtk
+from gi.repository import Gio, Gtk
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +27,12 @@ def create_main_window(app, config_service, theme_service, test_mode: bool = Fal
     return SlateWindow(app, config_service, theme_service, test_mode=test_mode)
 
 
-class SlateWindow(Adw.ApplicationWindow):
-    """Main application window with GTK4/Adwaita."""
+class SlateWindow(Gtk.ApplicationWindow):
+    """Main application window with GTK4."""
 
     def __init__(
         self,
-        app: Adw.Application,
+        app: Gtk.Application,
         config_service: ConfigService,
         theme_service: ThemeService,
         test_mode: bool = False,
@@ -71,6 +70,8 @@ class SlateWindow(Adw.ApplicationWindow):
         self._apply_theme()
         self._setup_main_layout()
         self._register_shortcuts()
+
+        self.connect("close-request", self._on_close_request)
 
     def _set_accessible_names(self) -> None:
         """Set accessible names for test automation."""
@@ -119,15 +120,14 @@ class SlateWindow(Adw.ApplicationWindow):
         content_box.set_hexpand(True)
         content_box.set_vexpand(True)
 
-        header = Adw.HeaderBar()
-        header.set_show_start_title_buttons(False)
-        header.set_show_end_title_buttons(True)
+        header = Gtk.HeaderBar()
+        header.set_decoration_layout(":minimize,maximize,close")
 
         if self._test_mode:
             self._try_set_accessible_name(header, "slate-headerbar")
 
         title_label = Gtk.Label(label="Slate")
-        title_label.set_css_classes(["title"])
+        title_label.add_css_class("title")
         header.set_title_widget(title_label)
 
         content_box.append(header)
@@ -150,7 +150,7 @@ class SlateWindow(Adw.ApplicationWindow):
 
         content_box.append(self._paned)
 
-        self.set_content(content_box)
+        self.set_child(content_box)
 
         try:
             show_panel = self._config_service.get("app", "side_panel_visible") == "true"
@@ -339,6 +339,9 @@ class SlateWindow(Adw.ApplicationWindow):
 
         except Exception as e:
             logger.error(f"Failed to save window geometry: {e}")
+
+    def _on_close_request(self, *args) -> None:
+        self.save_geometry()
 
     def close(self) -> None:
         self.save_geometry()

@@ -27,7 +27,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 |---|---|---|
 | Language | Python | 3.10+ |
 | GUI Toolkit | GTK4 via PyGObject | >= 3.44 |
-| HIG Shell | libadwaita (Adw) | GTK4 built-in |
+| UI Framework | GTK4 | GTK4 built-in |
 | Syntax Highlighting | GtkSourceView 5 | GTK4 built-in |
 | File Watching | Gio.FileMonitor | GTK4 built-in |
 | Git | gitpython | >= 3.1 |
@@ -41,7 +41,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 **System Dependencies (apt):**
 ```
 python3 python3-gi python3-gi-cairo
-gir1.2-gtk-4.0 gir1.2-gtksource-5 gir1.2-adw-1
+gir1.2-gtk-4.0 gir1.2-gtksource-5
 ripgrep git
 ```
 
@@ -141,7 +141,7 @@ ripgrep git
 - UI layer uses `Gtk`, `GtkSource`, `Gio`, `Adw` directly
 - Service layer uses lazy imports inside methods only (keeps GTK-free at import time)
 - `EditorView` wraps `GtkSource.View` — never configure `GtkSource.View` directly elsewhere
-- `SlateApplication(Adw.Application)` is the composition root — all DI wiring in `ui/app.py`
+- `SlateApplication(Gtk.Application)` is the composition root — all DI wiring in `ui/app.py`
 - Theme applied before window is presented (startup order requirement)
 - Cross-component communication via `EventBus` — NOT GTK signals
 - GTK signals used only within UI layer for widget interactions
@@ -258,7 +258,7 @@ def detect(self, path: str):
 ### 9. Error Handling Strategy
 
 - Services raise typed exceptions from `core/exceptions.py`
-- UI layer catches at the boundary → `Adw.AlertDialog`. Services never show UI.
+- UI layer catches at the boundary → `Gtk.MessageDialog`. Services never show UI.
 - Plugins show their own errors inline
 - Plugin `activate()` calls are wrapped in try/except — a failing plugin is skipped with a stderr log; the app continues
 

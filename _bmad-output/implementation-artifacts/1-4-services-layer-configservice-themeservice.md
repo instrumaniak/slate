@@ -278,12 +278,11 @@ Target: 90%+ line coverage for both service modules.
 
 **configparser (stdlib):** No version concerns. Use `ConfigParser` with `interpolation=None` for safety.
 
-**GTK4/Adwaita:** GNOME 46 ships with Adwaita 1.4. Theme detection via `Adw.StyleManager.get_default()`.
+**GTK4:** Theme detection via `Gtk.Settings.get_default()`. Use `gtk-application-prefer-dark-theme` property.
 
 **Key Considerations:**
-- `Adw.StyleManager` provides `color_scheme` property (`ADW_COLOR_SCHEME_PREFER_LIGHT/DARK`)
-- `Gtk.Settings` `gtk-application-prefer-dark-theme` property for legacy detection
-- Fallback to `gtk-application-prefer-dark-theme` if Adwaita not available
+- `Gtk.Settings` provides `gtk-application-prefer-dark-theme` boolean property
+- Supports live theme change detection via notify signal
 
 **Security/Performance:**
 - Config file should be stored with user-only permissions (600)
@@ -295,7 +294,7 @@ Target: 90%+ line coverage for both service modules.
 **Critical Rules (from project-context.md):**
 - ❌ Never import GTK at module level in `core/` or `services/`
 - ✅ Services raise typed exceptions from `core/exceptions.py`
-- ✅ UI layer catches exceptions → shows `Adw.AlertDialog`
+- ✅ UI layer catches exceptions → shows `Gtk.MessageDialog`
 - ✅ Plugin `activate()` wrapped in try/except — failing plugin skipped
 - ✅ Config file: `~/.config/slate/config.ini`
 - ✅ Plugin config sections use `[plugin.<plugin_id>]`

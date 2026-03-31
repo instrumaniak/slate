@@ -175,7 +175,7 @@ Slate bets on the OS, not abstracting away from it. Performance comes from nativ
 **Required System Packages (apt):**
 ```
 python3  python3-gi  python3-gi-cairo
-gir1.2-gtk-4.0  gir1.2-gtksource-5  gir1.2-adw-1
+gir1.2-gtk-4.0  gir1.2-gtksource-5
 ```
 
 **Required External Tools:**
