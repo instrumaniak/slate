@@ -71,7 +71,7 @@ class ThemeService:
             Tuple of (color_mode, is_dark, editor_scheme)
             - color_mode: "light" | "dark" | "system"
             - is_dark: True if resolved theme is dark
-            - editor_scheme: GtkSourceView scheme ID ("Adwaita" or "Adwaita-dark")
+            - editor_scheme: GtkSourceView scheme ID from config (e.g., "Adwaita" or "Adwaita-dark")
         """
         with self._lock:
             color_mode = self._current_color_mode
@@ -83,20 +83,61 @@ class ThemeService:
             else:  # light
                 is_dark = False
 
-            editor_scheme = "Adwaita-dark" if is_dark else "Adwaita"
+            editor_scheme = self._get_editor_scheme(is_dark)
 
             return (color_mode, is_dark, editor_scheme)
+
+    def _get_editor_scheme(self, is_dark: bool) -> str:
+        """Get editor scheme from config or use defaults.
+
+        Args:
+            is_dark: True for dark mode, False for light mode.
+
+        Returns:
+            Editor scheme ID (e.g., "Adwaita-dark" or "Adwaita")
+        """
+        if self._config_service is None:
+            return "Adwaita-dark" if is_dark else "Adwaita"
+
+        try:
+            if is_dark:
+                scheme = self._config_service.get("editor", "dark_scheme")
+                return scheme if scheme else "Adwaita-dark"
+            else:
+                scheme = self._config_service.get("editor", "light_scheme")
+                return scheme if scheme else "Adwaita"
+        except Exception as e:
+            logger.warning(f"Failed to load editor scheme from config: {e}")
+            return "Adwaita-dark" if is_dark else "Adwaita"
 
     def _detect_system_theme(self) -> bool:
         """Detect if system prefers dark theme.
 
-        Uses lazy import to avoid GTK at module level.
-        Reads Gtk.Settings gtk-application-prefer-dark-theme property.
-        Supports live theme change detection via notify signal.
+        Uses gsettings as primary method (more reliable on GNOME).
+        Falls back to GTK property if gsettings unavailable.
 
         Returns:
             True if system prefers dark theme, False otherwise.
         """
+        try:
+            import subprocess
+
+            result = subprocess.run(
+                ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            if result.returncode == 0:
+                value = result.stdout.strip()
+                if value == "'prefer-dark'":
+                    self._setup_gtk_theme_watcher()
+                    return True
+                elif value == "'default'":
+                    pass
+        except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.SubprocessError):
+            pass
+
         try:
             import gi
 
@@ -109,17 +150,33 @@ class ThemeService:
                 return False
 
             is_dark = bool(settings.get_property("gtk-application-prefer-dark-theme"))
-
-            if not self._system_theme_watcher_connected:
-                self._system_theme_watcher_connected = True
-                self._theme_watcher_id = settings.connect(
-                    "notify::gtk-application-prefer-dark-theme", self._on_system_theme_changed
-                )
+            if is_dark:
+                self._setup_gtk_theme_watcher()
 
             return is_dark
         except (ImportError, AttributeError) as e:
             logger.debug(f"GTK theme detection failed: {e}")
             return False
+
+    def _setup_gtk_theme_watcher(self) -> None:
+        """Set up GTK theme watcher if not already connected."""
+        if self._system_theme_watcher_connected:
+            return
+
+        try:
+            import gi
+
+            gi.require_version("Gtk", "4.0")
+            from gi.repository import Gtk  # type: ignore[import-untyped]
+
+            settings = Gtk.Settings.get_default()
+            if settings is not None:
+                self._system_theme_watcher_connected = True
+                self._theme_watcher_id = settings.connect(
+                    "notify::gtk-application-prefer-dark-theme", self._on_system_theme_changed
+                )
+        except (ImportError, AttributeError):
+            pass
 
     def _on_system_theme_changed(self, settings, pspec) -> None:
         """Handle live system theme change."""

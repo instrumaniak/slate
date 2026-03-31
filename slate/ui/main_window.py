@@ -56,6 +56,7 @@ class SlateWindow(Gtk.ApplicationWindow):
 
         self._config_service = config_service
         self._theme_service = theme_service
+        self._editor_scheme = "Adwaita"  # Default until theme is resolved
 
         from slate.services import get_file_service
 
@@ -70,6 +71,7 @@ class SlateWindow(Gtk.ApplicationWindow):
         self._apply_theme()
         self._setup_main_layout()
         self._register_shortcuts()
+        self._register_theme_callback()
 
         self.connect("close-request", self._on_close_request)
 
@@ -109,10 +111,31 @@ class SlateWindow(Gtk.ApplicationWindow):
     def _apply_theme(self) -> None:
         """Apply theme before window presentation."""
         try:
-            _, _, editor_scheme = self._theme_service.resolve_theme()
-            logger.debug(f"Resolved editor scheme: {editor_scheme}")
+            _, _, self._editor_scheme = self._theme_service.resolve_theme()
+            logger.debug(f"Resolved editor scheme: {self._editor_scheme}")
         except Exception as e:
             logger.warning(f"Failed to resolve theme: {e}")
+            self._editor_scheme = "Adwaita"
+
+    def _register_theme_callback(self) -> None:
+        """Register callback for live theme changes."""
+
+        def on_theme_changed(color_mode: str, is_dark: bool, editor_scheme: str) -> None:
+            self._editor_scheme = editor_scheme
+            self._update_editor_schemes(editor_scheme)
+
+        self._theme_service.on_mode_changed(on_theme_changed)
+
+    def _update_editor_schemes(self, editor_scheme: str) -> None:
+        """Update color scheme for all open editor views."""
+        for tab in self._tab_manager.get_tabs().values():
+            if "editor_view" in tab and tab["editor_view"]:
+                buffer = tab["editor_view"].get_buffer()
+                if buffer:
+                    from slate.ui.editor.editor_factory import EditorViewFactory
+
+                    factory = EditorViewFactory()
+                    factory.apply_scheme(buffer, editor_scheme)
 
     def _setup_main_layout(self) -> None:
         """Set up main window layout with activity bar, side panel, editor."""
@@ -241,6 +264,7 @@ class SlateWindow(Gtk.ApplicationWindow):
         editor_view = EditorView(
             path=path,
             content=tab.get("content", ""),
+            editor_scheme=self._editor_scheme,
             on_modified_changed=lambda dirty, p=path: self._on_editor_modified(p, dirty),
         )
 

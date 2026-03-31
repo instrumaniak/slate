@@ -71,7 +71,11 @@ class TestThemeServiceResolveTheme:
     def test_light_mode_returns_light_scheme(self):
         """Light mode should return light editor scheme."""
         mock_config = Mock()
-        mock_config.get.return_value = "light"
+        mock_config.get.side_effect = lambda section, key: {
+            ("app", "color_mode"): "light",
+            ("editor", "dark_scheme"): "Adwaita-dark",
+            ("editor", "light_scheme"): "Adwaita",
+        }.get((section, key))
 
         service = ThemeService(config_service=mock_config)
         color_mode, is_dark, editor_scheme = service.resolve_theme()
@@ -83,7 +87,11 @@ class TestThemeServiceResolveTheme:
     def test_dark_mode_returns_dark_scheme(self):
         """Dark mode should return dark editor scheme."""
         mock_config = Mock()
-        mock_config.get.return_value = "dark"
+        mock_config.get.side_effect = lambda section, key: {
+            ("app", "color_mode"): "dark",
+            ("editor", "dark_scheme"): "Adwaita-dark",
+            ("editor", "light_scheme"): "Adwaita",
+        }.get((section, key))
 
         service = ThemeService(config_service=mock_config)
         color_mode, is_dark, editor_scheme = service.resolve_theme()
@@ -95,7 +103,11 @@ class TestThemeServiceResolveTheme:
     def test_system_mode_uses_system_detection(self):
         """System mode should detect system theme."""
         mock_config = Mock()
-        mock_config.get.return_value = "system"
+        mock_config.get.side_effect = lambda section, key: {
+            ("app", "color_mode"): "system",
+            ("editor", "dark_scheme"): "Adwaita-dark",
+            ("editor", "light_scheme"): "Adwaita",
+        }.get((section, key))
 
         with patch.object(ThemeService, "_detect_system_theme", return_value=True):
             service = ThemeService(config_service=mock_config)
@@ -108,7 +120,11 @@ class TestThemeServiceResolveTheme:
     def test_system_mode_detects_light(self):
         """System mode should detect light system theme."""
         mock_config = Mock()
-        mock_config.get.return_value = "system"
+        mock_config.get.side_effect = lambda section, key: {
+            ("app", "color_mode"): "system",
+            ("editor", "dark_scheme"): "Adwaita-dark",
+            ("editor", "light_scheme"): "Adwaita",
+        }.get((section, key))
 
         with patch.object(ThemeService, "_detect_system_theme", return_value=False):
             service = ThemeService(config_service=mock_config)
@@ -214,19 +230,18 @@ class TestThemeServiceSystemDetection:
         assert isinstance(result, bool)
 
     def test_detect_system_theme_with_gtk_dark(self):
-        """Should detect dark when Gtk.Settings prefers dark theme."""
+        """Should detect dark when gsettings or Gtk.Settings prefers dark theme."""
         mock_config = Mock()
         mock_config.get.return_value = "system"
 
         service = ThemeService(config_service=mock_config)
 
-        # Directly test the method - mock at the service level
         with patch.object(service, "_detect_system_theme", return_value=True):
             result = service._detect_system_theme()
             assert result is True
 
     def test_detect_system_theme_with_gtk_light(self):
-        """Should detect light when Gtk.Settings does not prefer dark."""
+        """Should detect light when gsettings and Gtk.Settings show light."""
         mock_config = Mock()
         mock_config.get.return_value = "system"
 
@@ -235,7 +250,8 @@ class TestThemeServiceSystemDetection:
 
         service = ThemeService(config_service=mock_config)
 
-        with patch("gi.require_version"):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="'default'\n")
             with patch.dict(
                 "sys.modules",
                 {
@@ -248,7 +264,7 @@ class TestThemeServiceSystemDetection:
                 assert result is False
 
     def test_graceful_when_gtk_settings_none(self):
-        """Should return False when Gtk.Settings.get_default() returns None."""
+        """Should return False when gsettings unavailable and Gtk.Settings returns None."""
         mock_config = Mock()
         mock_config.get.return_value = "system"
 
@@ -257,10 +273,12 @@ class TestThemeServiceSystemDetection:
 
         service = ThemeService(config_service=mock_config)
 
-        with patch.dict("sys.modules", {"gi.repository.Gtk": mock_gtk}):
-            with patch("gi.require_version"):
-                result = service._detect_system_theme()
-                assert result is False
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = FileNotFoundError("gsettings not found")
+            with patch.dict("sys.modules", {"gi.repository.Gtk": mock_gtk}):
+                with patch("gi.require_version"):
+                    result = service._detect_system_theme()
+                    assert result is False
 
     def test_graceful_fallback_when_no_gtk(self):
         """Should return False (light) when GTK unavailable."""
@@ -269,10 +287,11 @@ class TestThemeServiceSystemDetection:
 
         service = ThemeService(config_service=mock_config)
 
-        # Patch the module to simulate no GTK
-        with patch("slate.services.theme_service.logger"):
-            result = service._detect_system_theme()
-            assert result is False
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = FileNotFoundError("gsettings not found")
+            with patch("slate.services.theme_service.logger"):
+                result = service._detect_system_theme()
+                assert result is False
 
 
 class TestThemeServiceOnModeChanged:
@@ -385,9 +404,13 @@ class TestThemeServiceEditorScheme:
     """Test editor scheme mapping."""
 
     def test_light_mode_maps_to_adwaita(self):
-        """Light mode should map to Adwaita scheme."""
+        """Light mode should map to Adwaita scheme from config."""
         mock_config = Mock()
-        mock_config.get.return_value = "light"
+        mock_config.get.side_effect = lambda section, key: {
+            ("app", "color_mode"): "light",
+            ("editor", "dark_scheme"): "Adwaita-dark",
+            ("editor", "light_scheme"): "Adwaita",
+        }.get((section, key))
 
         service = ThemeService(config_service=mock_config)
         _, _, editor_scheme = service.resolve_theme()
@@ -395,14 +418,32 @@ class TestThemeServiceEditorScheme:
         assert editor_scheme == "Adwaita"
 
     def test_dark_mode_maps_to_adwaita_dark(self):
-        """Dark mode should map to Adwaita-dark scheme."""
+        """Dark mode should map to Adwaita-dark scheme from config."""
         mock_config = Mock()
-        mock_config.get.return_value = "dark"
+        mock_config.get.side_effect = lambda section, key: {
+            ("app", "color_mode"): "dark",
+            ("editor", "dark_scheme"): "Adwaita-dark",
+            ("editor", "light_scheme"): "Adwaita",
+        }.get((section, key))
 
         service = ThemeService(config_service=mock_config)
         _, _, editor_scheme = service.resolve_theme()
 
         assert editor_scheme == "Adwaita-dark"
+
+    def test_uses_custom_scheme_from_config(self):
+        """Should use custom scheme from config when available."""
+        mock_config = Mock()
+        mock_config.get.side_effect = lambda section, key: {
+            ("app", "color_mode"): "light",
+            ("editor", "dark_scheme"): "Solarized-dark",
+            ("editor", "light_scheme"): "Solarized-light",
+        }.get((section, key))
+
+        service = ThemeService(config_service=mock_config)
+        _, _, editor_scheme = service.resolve_theme()
+
+        assert editor_scheme == "Solarized-light"
 
 
 class TestThemeServiceZeroGtkImports:
