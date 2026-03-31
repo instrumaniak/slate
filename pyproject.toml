@@ -22,7 +22,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "PyGObject>=3.44",
+    "PyGObject>=3.42",
     "gitpython>=3.1",
 ]
 
