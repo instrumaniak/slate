@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +9,7 @@ try:
     import gi
 
     gi.require_version("GtkSource", "5")
-    from gi.repository import GtkSource, Gtk
+    from gi.repository import Gtk, GtkSource
 
     GTK_AVAILABLE = True
 except (ImportError, ValueError):

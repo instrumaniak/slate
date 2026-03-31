@@ -159,7 +159,11 @@ class HostUIBridge(ABC):
 
     @abstractmethod
     def register_action(
-        self, plugin_id: str, action_id: str, callback: Callable, shortcut: str | None = None
+        self,
+        plugin_id: str,
+        action_id: str,
+        callback: Callable[..., Any],
+        shortcut: str | None = None,
     ) -> None:
         """Register an application-level action (menu item or keyboard shortcut).
 

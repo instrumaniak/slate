@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -452,6 +451,7 @@ class TestThemeServiceZeroGtkImports:
     def test_zero_gtk_imports_at_module_level(self):
         """ThemeService module should have zero GTK imports at module level."""
         import inspect
+
         import slate.services.theme_service as theme_module
 
         source = inspect.getsource(theme_module)

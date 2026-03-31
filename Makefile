@@ -24,15 +24,20 @@ install-test:
 
 lint:
 	ruff check slate/
+	ruff check tests/
 
 format:
 	ruff format slate/
+	ruff format tests/
 
 typecheck:
 	mypy slate/
 
 test:
-	pytest tests/ --cov=slate --cov-report=term-missing
+	pytest tests/ --cov=slate --cov-report=term-missing --cov-fail-under=85
+
+test-fast:
+	pytest tests/services/ tests/core/ -v --tb=short
 
 test-unit:
 	pytest tests/services/ tests/core/ -v

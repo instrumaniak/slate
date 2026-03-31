@@ -50,9 +50,9 @@ LANGUAGE_MAP = {
 class EditorViewFactory:
     """Factory for creating configured GtkSource.View instances."""
 
-    _instance: "EditorViewFactory | None" = None
+    _instance: EditorViewFactory | None = None
 
-    def __new__(cls) -> "EditorViewFactory":
+    def __new__(cls) -> EditorViewFactory:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._language_manager = None

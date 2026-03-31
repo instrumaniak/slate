@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Type
 
 from slate.core.event_bus import EventBus
 from slate.core.events import (

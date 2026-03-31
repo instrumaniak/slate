@@ -43,7 +43,7 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # Epic 1: Editor Core & Project Startup
-  epic-1: in-progress
+  epic-1: done
   1-1-project-initialization-packaging: done
   1-2-core-layer-models-events-eventbus: done
   1-3-plugin-api-contracts-pluginmanager: done
@@ -52,11 +52,11 @@ development_status:
   1-6-main-window-editor-view: done
   1-7-tab-manager-save-discard-guard: done
   1-8-cli-entry-point-startup-sequence: done
-  1-9-development-tooling-ci: backlog
-  epic-1-retrospective: optional
+  1-9-development-tooling-ci: done
+  epic-1-retrospective: done
 
   # Epic 2: File Explorer & Project Navigation
-  epic-2: backlog
+  epic-2: in-progress
   2-1-file-explorer-basic-tree-view-navigation: backlog
   2-2-file-explorer-lazy-loading-performance: backlog
   2-3-file-explorer-context-menu-file-operations: backlog

@@ -1,5 +1,3 @@
-import os
-import tempfile
 import pytest
 from gi.repository import GLib
 
@@ -34,6 +32,7 @@ def isolated_env(temp_home, temp_config, monkeypatch):
 def gtk_app(isolated_env, tmp_path):
     """Create and return SlateApplication instance with unique ID."""
     import uuid
+
     from slate.ui.app import SlateApplication
 
     app_id = f"com.slate.editor.test-{uuid.uuid4().hex[:8]}"

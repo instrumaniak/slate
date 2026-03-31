@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-from slate.ui.editor.editor_factory import EditorViewFactory, LANGUAGE_MAP
+from slate.ui.editor.editor_factory import EditorViewFactory
 
 
 class TestEditorViewFactoryLanguageDetection:

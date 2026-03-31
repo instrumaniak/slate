@@ -1,12 +1,12 @@
 """Tests for PluginManager lifecycle and error handling."""
 
-import pytest
 import logging
 from typing import Any
 
-from slate.services.plugin_manager import PluginManager
-from slate.core.plugin_api import AbstractPlugin, PluginContext, ActivityBarItem
+import pytest
 
+from slate.core.plugin_api import AbstractPlugin, ActivityBarItem, PluginContext
+from slate.services.plugin_manager import PluginManager
 
 # ==================== Fixtures ====================
 

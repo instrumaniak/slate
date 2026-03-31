@@ -10,7 +10,8 @@ import os
 import shutil
 import tempfile
 import threading
-from configparser import ConfigParser, Error as ConfigParserError
+from configparser import ConfigParser
+from configparser import Error as ConfigParserError
 from pathlib import Path
 from typing import Final
 

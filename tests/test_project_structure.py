@@ -1,6 +1,5 @@
 """Tests for project structure."""
 
-import os
 from pathlib import Path
 
 

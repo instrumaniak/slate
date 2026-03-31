@@ -12,5 +12,4 @@ To run with full AT-SPI accessibility testing, you need a real desktop session.
 
 import pytest
 
-
 pytest.skip(reason="AT-SPI tests require full desktop session with D-Bus", allow_module_level=True)

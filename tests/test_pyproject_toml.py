@@ -1,6 +1,5 @@
 """Tests for pyproject.toml configuration."""
 
-import re
 from pathlib import Path
 
 

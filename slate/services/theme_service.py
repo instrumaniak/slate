@@ -212,10 +212,13 @@ class ThemeService:
 
                 settings = Gtk.Settings.get_default()
                 if settings is not None:
-                    settings.disconnect(self._theme_watcher_id)
-            except Exception:
-                pass
-            self._theme_watcher_id = None
+                    success = settings.disconnect(self._theme_watcher_id)
+                    if not success:
+                        logger.warning("Failed to disconnect theme watcher signal")
+            except Exception as e:
+                logger.warning(f"Error disconnecting theme watcher: {e}")
+            finally:
+                self._theme_watcher_id = None
         self._system_theme_watcher_connected = False
 
     def set_color_mode(self, mode: str) -> None:

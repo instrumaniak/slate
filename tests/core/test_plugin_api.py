@@ -1,9 +1,8 @@
 """Tests for plugin API contracts (AbstractPlugin, PluginContext, HostUIBridge, ActivityBarItem)."""
 
+from dataclasses import FrozenInstanceError
+
 import pytest
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, FrozenInstanceError
-from typing import Any, Callable
 
 # Import the actual module once implemented
 # from slate.core.plugin_api import AbstractPlugin, PluginContext, HostUIBridge, ActivityBarItem
@@ -79,8 +78,8 @@ def test_plugin_context_cannot_be_instantiated():
 
 def test_plugin_context_is_abstract():
     """PluginContext should be an ABC with abstract methods."""
+
     from slate.core.plugin_api import PluginContext
-    import inspect
 
     # Check that PluginContext is abstract
     assert hasattr(PluginContext, "__abstractmethods__")
@@ -89,8 +88,9 @@ def test_plugin_context_is_abstract():
 
 def test_plugin_context_has_required_abstract_methods():
     """PluginContext should have all required abstract methods."""
-    from slate.core.plugin_api import PluginContext
     import inspect
+
+    from slate.core.plugin_api import PluginContext
 
     required_methods = {
         "get_service",
@@ -127,8 +127,9 @@ def test_host_ui_bridge_cannot_be_instantiated():
 
 def test_host_ui_bridge_has_abstract_methods():
     """HostUIBridge should have abstract methods: register_panel, register_action, register_dialog."""
-    from slate.core.plugin_api import HostUIBridge
     import inspect
+
+    from slate.core.plugin_api import HostUIBridge
 
     abstract_methods = []
     for name, method in inspect.getmembers(HostUIBridge, predicate=inspect.isfunction):
@@ -141,8 +142,9 @@ def test_host_ui_bridge_has_abstract_methods():
 
 def test_host_ui_bridge_register_panel_signature():
     """register_panel should accept plugin_id, panel_id, widget, title, icon_name."""
-    from slate.core.plugin_api import HostUIBridge
     import inspect
+
+    from slate.core.plugin_api import HostUIBridge
 
     sig = inspect.signature(HostUIBridge.register_panel)
     params = list(sig.parameters.keys())
@@ -152,8 +154,9 @@ def test_host_ui_bridge_register_panel_signature():
 
 def test_host_ui_bridge_register_action_signature():
     """register_action should accept plugin_id, action_id, callback, shortcut."""
-    from slate.core.plugin_api import HostUIBridge
     import inspect
+
+    from slate.core.plugin_api import HostUIBridge
 
     sig = inspect.signature(HostUIBridge.register_action)
     params = list(sig.parameters.keys())
@@ -165,8 +168,9 @@ def test_host_ui_bridge_register_action_signature():
 
 def test_host_ui_bridge_register_dialog_signature():
     """register_dialog should accept plugin_id, dialog_id, factory."""
-    from slate.core.plugin_api import HostUIBridge
     import inspect
+
+    from slate.core.plugin_api import HostUIBridge
 
     sig = inspect.signature(HostUIBridge.register_dialog)
     params = list(sig.parameters.keys())
@@ -176,13 +180,13 @@ def test_host_ui_bridge_register_dialog_signature():
 
 def test_host_ui_bridge_show_notification_exists():
     """HostUIBridge should have show_notification method."""
+
     from slate.core.plugin_api import HostUIBridge
-    import inspect
 
     assert hasattr(HostUIBridge, "show_notification")
     # Should not be abstract (concrete implementation provided by host)
     # We expect it to be implemented, not abstract
-    method = getattr(HostUIBridge, "show_notification")
+    method = HostUIBridge.show_notification
     is_abstract = getattr(method, "__isabstractmethod__", False)
     assert not is_abstract, "show_notification should be implemented, not abstract"
 
@@ -220,8 +224,9 @@ def test_activity_bar_item_frozen():
 
 def test_activity_bar_item_fields_type_hints():
     """ActivityBarItem should have proper type hints."""
-    from slate.core.plugin_api import ActivityBarItem
     import dataclasses
+
+    from slate.core.plugin_api import ActivityBarItem
 
     fields = {f.name: f.type for f in dataclasses.fields(ActivityBarItem)}
     assert "plugin_id" in fields

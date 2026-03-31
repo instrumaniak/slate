@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import os
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
-from slate.services.config_service import ConfigService, DEFAULT_CONFIG
+from slate.services.config_service import DEFAULT_CONFIG, ConfigService
 
 
 class TestConfigServiceInitialization:
@@ -356,7 +355,7 @@ class TestConfigServiceDefaults:
             },
         }
 
-        assert DEFAULT_CONFIG == expected
+        assert expected == DEFAULT_CONFIG
 
 
 class TestConfigServiceEdgeCases:

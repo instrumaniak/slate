@@ -43,6 +43,8 @@ class PluginManager:
         self._active_plugins: dict[str, AbstractPlugin] = {}
         # The PluginContext instance used for all plugin activations
         self._context: PluginContext | None = context
+        # Cache of plugin IDs to avoid re-instantiation during registration
+        self._plugin_id_cache: dict[str, type[AbstractPlugin]] = {}
 
     def register_plugin(self, plugin_class: type[AbstractPlugin]) -> None:
         """Register a plugin class for activation.
@@ -53,18 +55,20 @@ class PluginManager:
         Raises:
             ValueError: If a plugin class with the same plugin_id is already registered.
         """
-        # Check for duplicate plugin_id
-        new_plugin_id = plugin_class().plugin_id  # Temporary instantiation for ID check
-        for existing_class in self._plugin_classes:
-            existing_instance = existing_class()
-            if existing_instance.plugin_id == new_plugin_id:
-                raise ValueError(
-                    f"Plugin class {plugin_class.__name__} has plugin_id '{new_plugin_id}' "
-                    f"which is already registered by {existing_class.__name__}"
-                )
+        # Check for duplicate plugin_id using cached IDs to avoid re-instantiation
+        temp_plugin = plugin_class()
+        new_plugin_id = temp_plugin.plugin_id
+
+        if new_plugin_id in self._plugin_id_cache:
+            existing_class = self._plugin_id_cache[new_plugin_id]
+            raise ValueError(
+                f"Plugin class {plugin_class.__name__} has plugin_id '{new_plugin_id}' "
+                f"which is already registered by {existing_class.__name__}"
+            )
 
         if plugin_class not in self._plugin_classes:
             self._plugin_classes.append(plugin_class)
+            self._plugin_id_cache[new_plugin_id] = plugin_class
 
     def load_plugin(self, plugin_class: type[AbstractPlugin]) -> ActivationResult:
         """Load and activate a single plugin.

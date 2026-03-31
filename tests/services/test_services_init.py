@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from slate.services import ConfigService, ThemeService, get_config_service, get_theme_service
 
 

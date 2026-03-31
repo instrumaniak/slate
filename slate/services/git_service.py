@@ -51,7 +51,7 @@ def _check_git_available() -> None:
 
     with _git_available_lock:
         # Double-check after acquiring lock
-        if _git_available is True:
+        if _git_available:
             return
 
         try:
@@ -133,9 +133,9 @@ class GitService:
             diff_index = repo.index.diff(None)
             for diff_item in diff_index:
                 path = diff_item.b_path or diff_item.a_path
-                if path not in seen_paths:
+                if path and path not in seen_paths:
                     seen_paths.add(path)
-                    change_type = diff_item.change_type
+                    change_type = diff_item.change_type or ""
                     status = _STATUS_MAP.get(change_type, change_type)
                     results.append({"path": path, "status": status})
 
@@ -143,9 +143,9 @@ class GitService:
             diff_staged = repo.index.diff("HEAD")
             for diff_item in diff_staged:
                 path = diff_item.b_path or diff_item.a_path
-                if path not in seen_paths:
+                if path and path not in seen_paths:
                     seen_paths.add(path)
-                    change_type = diff_item.change_type
+                    change_type = diff_item.change_type or ""
                     status = _STATUS_MAP.get(change_type, change_type)
                     results.append({"path": path, "status": status})
 
@@ -175,8 +175,8 @@ class GitService:
             repo = self._get_repo(repo_path)
 
             if path is not None:
-                return repo.git.diff("--", path)
-            return repo.git.diff()
+                return repo.git.diff("--", path)  # type: ignore[no-any-return]
+            return repo.git.diff()  # type: ignore[no-any-return]
 
     def stage_file(self, repo_path: str, path: str) -> None:
         """Stage a file (git add).
