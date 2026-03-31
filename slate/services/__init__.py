@@ -9,6 +9,7 @@ import threading
 from slate.services.config_service import DEFAULT_CONFIG, ConfigService
 from slate.services.file_service import FileService
 from slate.services.git_service import GitService
+from slate.services.plugin_manager import PluginManager
 from slate.services.theme_service import ThemeService
 
 __all__ = [
@@ -16,10 +17,12 @@ __all__ = [
     "DEFAULT_CONFIG",
     "FileService",
     "GitService",
+    "PluginManager",
     "ThemeService",
     "get_config_service",
     "get_file_service",
     "get_git_service",
+    "get_plugin_manager",
     "get_theme_service",
 ]
 
@@ -90,3 +93,21 @@ def get_git_service() -> GitService:
             if _git_service is None:
                 _git_service = GitService()
     return _git_service
+
+
+_plugin_manager: PluginManager | None = None
+_plugin_manager_lock = threading.Lock()
+
+
+def get_plugin_manager() -> PluginManager:
+    """Get or create the PluginManager singleton.
+
+    Returns:
+        The PluginManager instance.
+    """
+    global _plugin_manager
+    if _plugin_manager is None:
+        with _plugin_manager_lock:
+            if _plugin_manager is None:
+                _plugin_manager = PluginManager()
+    return _plugin_manager

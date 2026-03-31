@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-25T06:14:00.000Z
-last_updated: 2026-03-27T12:00:00.000Z
+last_updated: 2026-03-31
 project: slate
 project_key: NOKEY
 tracking_system: file-system
@@ -51,7 +51,7 @@ development_status:
   1-5-services-layer-fileservice-gitservice: done
   1-6-main-window-editor-view: done
   1-7-tab-manager-save-discard-guard: done
-  1-8-cli-entry-point-startup-sequence: ready-for-dev
+  1-8-cli-entry-point-startup-sequence: done
   1-9-development-tooling-ci: backlog
   epic-1-retrospective: optional
 

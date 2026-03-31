@@ -76,17 +76,17 @@ class SlateApplication(Gtk.Application):
 
     def _on_activate(self, app: Gtk.Application) -> None:
         """Handle application activation."""
-        from slate.services import get_config_service, get_file_service, get_theme_service
+        from slate.services import get_config_service, get_theme_service
         from slate.ui.main_window import create_main_window
 
+        # Step 1: Load config
         self._config_service = get_config_service()
-        self._theme_service = get_theme_service()
-        self._file_service = get_file_service()
 
+        # Step 2: Resolve theme before window creation
+        self._theme_service = get_theme_service()
         self._theme_service.resolve_theme()
 
-        cli_path = self._process_cli_args()
-
+        # Step 3: Create window
         self._main_window = create_main_window(
             app,
             self._config_service,
@@ -94,8 +94,32 @@ class SlateApplication(Gtk.Application):
             test_mode=self._test_mode,
         )
 
+        # Step 4: Activate plugins via PluginManager (if available)
+        try:
+            from slate.services import get_plugin_manager
+
+            plugin_manager = get_plugin_manager()
+            plugin_manager.activate_all()
+        except Exception as e:
+            logger.warning(f"Plugin activation failed: {e}")
+
+        # Step 5: Restore previous state (last_folder)
+        cli_path = os.environ.get("SLATE_CLI_PATH")
+        is_folder = False
+        if not cli_path:
+            last_folder = self._config_service.get("app", "last_folder")
+            if last_folder and os.path.isdir(last_folder):
+                cli_path = last_folder
+                is_folder = True
+        elif os.path.isdir(cli_path):
+            is_folder = True
+        elif os.path.isfile(cli_path):
+            is_folder = False
+
+        # Step 6: Resolve CLI argument (path to file/folder)
+        # Step 7: Present window (after all setup)
         if cli_path:
-            self._main_window.open_file_on_startup(cli_path)
+            self._main_window.open_file_on_startup(cli_path, is_folder=is_folder)
 
         self._main_window.present()
 

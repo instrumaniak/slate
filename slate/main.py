@@ -1,5 +1,6 @@
 """Main entry point for Slate."""
 
+import os
 import sys
 
 from slate.ui.app import main as app_main
@@ -16,9 +17,16 @@ def main() -> int:
         )
         return 1
 
-    print(f"Slate v{__version__}")
+    if len(sys.argv) > 1:
+        path_arg = sys.argv[1]
+        if path_arg not in ("-v", "--version"):
+            cli_path = os.path.expanduser(path_arg)
+            if os.path.exists(cli_path):
+                os.environ["SLATE_CLI_PATH"] = os.path.abspath(cli_path)
+
     return app_main()
 
 
 if __name__ == "__main__":
+    print(f"Slate v{__version__}")
     sys.exit(main())

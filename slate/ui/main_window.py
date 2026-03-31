@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -247,9 +248,16 @@ class SlateWindow(Gtk.ApplicationWindow):
         if tab and "editor_view" in tab:
             self._editor_scroll.set_child(tab["editor_view"])
 
-    def open_file_on_startup(self, path: str) -> None:
+    def open_file_on_startup(self, path: str, is_folder: bool = False) -> None:
         """Open a file on application startup."""
-        logger.debug(f"Opening file on startup: {path}")
+        logger.debug(f"Opening file on startup: {path}, is_folder: {is_folder}")
+
+        if is_folder:
+            self._paned.set_visible(True)
+            self._side_panel.set_visible(True)
+        else:
+            self._paned.set_visible(True)
+            self._side_panel.set_visible(False)
 
         tab = self._tab_manager.open_tab(path)
         self._tab_bar.add_tab(path, path.split("/")[-1])
@@ -356,6 +364,29 @@ class SlateWindow(Gtk.ApplicationWindow):
 
     def _on_close_request(self, *args) -> None:
         self.save_geometry()
+
+        dirty_tabs = [
+            path for path, tab in self._tab_manager.get_tabs().items() if tab.get("is_dirty", False)
+        ]
+        if not dirty_tabs:
+            return
+
+        for path in dirty_tabs:
+            filename = os.path.basename(path)
+            result = self._show_close_dialog(filename, path)
+            if result == "cancel":
+                return
+            if result == "save":
+                tab = self._tab_manager.get_tabs().get(path, {})
+                content = tab.get("content", "")
+                from slate.services import get_file_service
+
+                file_service = get_file_service()
+                try:
+                    file_service.write_file(path, content)
+                except Exception as e:
+                    logger.error(f"Failed to save file {path}: {e}")
+                    return
 
     def close(self) -> None:
         self.save_geometry()

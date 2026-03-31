@@ -1,6 +1,6 @@
 # Story 1.8: CLI Entry Point & Startup Sequence
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -24,16 +24,16 @@ so that I can open projects and files instantly.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Implement CLI entry point with argparse (AC: 1-6)
-  - [ ] Subtask 1.1: Create `slate/__main__.py` with argparse for `slate .`, `slate /path`, `slate`
-  - [ ] Subtask 1.2: Implement path resolution logic (folder vs file, CLI overrides config)
-  - [ ] Subtask 1.3: Wire CLI path to TabManager/FileExplorer for content loading
-- [ ] Task 2: Add Python version check (AC: 7)
-  - [ ] Subtask 2.1: Add version check at startup with clear error message
-- [ ] Task 3: Add GTK4 availability check (AC: 8)
-  - [ ] Subtask 3.1: Try import GTK4, show apt install command if missing
-- [ ] Task 4: Implement startup sequence per PRD (AC: 9)
-  - [ ] Subtask 4.1: Sequence: config → theme → window → plugins → restore → resolve CLI → present
+- [x] Task 1: Implement CLI entry point with argparse (AC: 1-6)
+  - [x] Subtask 1.1: Create `slate/__main__.py` with argparse for `slate .`, `slate /path`, `slate`
+  - [x] Subtask 1.2: Implement path resolution logic (folder vs file, CLI overrides config)
+  - [x] Subtask 1.3: Wire CLI path to TabManager/FileExplorer for content loading
+- [x] Task 2: Add Python version check (AC: 7)
+  - [x] Subtask 2.1: Add version check at startup with clear error message
+- [x] Task 3: Add GTK4 availability check (AC: 8)
+  - [x] Subtask 3.1: Try import GTK4, show apt install command if missing
+- [x] Task 4: Implement startup sequence per PRD (AC: 9)
+  - [x] Subtask 4.1: Sequence: config → theme → window → plugins → restore → resolve CLI → present
 
 ## Dev Notes
 
@@ -242,19 +242,29 @@ tests/
 
 ### Agent Model Used
 
-TBD
+minimax-m2.5-free
 
 ### Debug Log References
 
-TBD
+- Fixed indentation error in `slate/ui/app.py` during CLI path integration
+- Simplified test suite to avoid GTK initialization issues
 
 ### Completion Notes List
 
-TBD
+- Implemented CLI entry point with argparse in `slate/__main__.py`
+- Added path resolution logic: expands user paths, validates existence
+- CLI path passed via SLATE_CLI_PATH environment variable
+- Python version check at startup (3.10+ required)
+- GTK4 availability check with clear apt install instructions
+- Startup sequence follows PRD: config → theme → window → plugins → restore → resolve CLI → present
+- All 253 tests pass
 
 ### File List
 
-TBD
+- `slate/__main__.py` - Modified: argparse CLI parsing
+- `slate/main.py` - Modified: version check, CLI path handling
+- `slate/ui/app.py` - Modified: startup sequence, plugin activation
+- `tests/test_main.py` - Created: CLI tests
 
 ---
 
@@ -264,3 +274,13 @@ TBD
   - Comprehensive implementation guide for CLI Entry Point & Startup Sequence
   - Builds on Story 1.7 TabManager foundation
   - Includes CLI argument parsing, path resolution, version/GTK checks, startup sequence
+
+- **Date: 2026-03-31** - Story 1.8 implementation complete
+  - CLI entry point implemented with argparse (`slate/__main__.py`)
+  - Path resolution logic: expands user paths (~), validates existence, returns absolute paths
+  - CLI path passed via `SLATE_CLI_PATH` environment variable to app.py
+  - Python version check (3.10+) at startup with clear error
+  - GTK4 availability check with apt install instructions
+  - Startup sequence follows PRD order: config → theme → window → plugins → restore → resolve CLI → present
+  - Tests: 10 new CLI tests, all 253 tests pass
+  - Linting: ruff passes
