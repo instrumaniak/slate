@@ -120,17 +120,7 @@ class SlateWindow(Gtk.ApplicationWindow):
         content_box.set_hexpand(True)
         content_box.set_vexpand(True)
 
-        header = Gtk.HeaderBar()
-        header.set_decoration_layout(":minimize,maximize,close")
-
-        if self._test_mode:
-            self._try_set_accessible_name(header, "slate-headerbar")
-
-        title_label = Gtk.Label(label="Slate")
-        title_label.add_css_class("title")
-        header.set_title_widget(title_label)
-
-        content_box.append(header)
+        self.set_title("Slate")
 
         self._activity_bar = self._create_activity_bar()
         content_box.append(self._activity_bar)

@@ -22,16 +22,15 @@ def test_app_window_has_test_mode(gtk_app_activated):
 
 @pytest.mark.timeout(30)
 def test_app_creates_headerbar(gtk_app_activated):
-    """Window should have a header bar."""
+    """Window should have a header bar via native titlebar."""
     window = gtk_app_activated
     content = window.get_child()
 
     assert content is not None
     assert isinstance(content, Gtk.Box)
 
-    header = content.get_first_child()
-    assert header is not None
-    assert isinstance(header, Gtk.HeaderBar)
+    title = window.get_title()
+    assert title == "Slate"
 
 
 @pytest.mark.timeout(30)
