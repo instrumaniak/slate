@@ -151,6 +151,23 @@ class TestTabClosedEvent:
         assert event.path == "/test/file.py"
 
 
+class TestFolderOpenedEvent:
+    """Test FolderOpenedEvent."""
+
+    def test_folder_opened_event_is_dataclass(self):
+        """FolderOpenedEvent should be a dataclass."""
+        from slate.core.events import FolderOpenedEvent
+
+        assert is_dataclass(FolderOpenedEvent)
+
+    def test_folder_opened_event_creation(self):
+        """FolderOpenedEvent should be creatable with required attributes."""
+        from slate.core.events import FolderOpenedEvent
+
+        event = FolderOpenedEvent(path="/test/project")
+        assert event.path == "/test/project"
+
+
 class TestSearchResultsReadyEvent:
     """Test SearchResultsReadyEvent."""
 

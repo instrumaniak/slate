@@ -1,6 +1,6 @@
 # Story 2.1: File Explorer — Basic Tree View & Navigation
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -24,43 +24,43 @@ So that I can browse and open files without leaving the editor.
 
 ## Tasks / Subtasks
 
-- [ ] Task 0: Verify and create required event classes (AC: 3)
-  - [ ] Subtask 0.1: Read `slate/core/events.py` — check if `OpenFileRequestedEvent(path: str)` exists
-  - [ ] Subtask 0.2: Read `slate/core/events.py` — check if `FolderOpenedEvent(path: str)` exists
-  - [ ] Subtask 0.3: If either is missing, add the dataclass to `slate/core/events.py`
-- [ ] Task 1: Implement FileExplorerPlugin skeleton (AC: 4, 5)
-  - [ ] Subtask 1.1: Create `slate/plugins/core/file_explorer.py` with AbstractPlugin subclass
-  - [ ] Subtask 1.2: Implement activate(context) — register panel factory, action, keybinding
-  - [ ] Subtask 1.3: Register panel with ID "file_explorer", icon "folder-symbolic", label "Explorer"
-  - [ ] Subtask 1.4: Register action "explorer.focus" and keybinding Ctrl+Shift+O
-- [ ] Task 2: Implement FileExplorerTree widget using modern GTK4 stack (AC: 1, 2, 8)
-  - [ ] Subtask 2.1: Create `slate/ui/panels/file_explorer_tree.py` with `Gtk.ListView` + `Gtk.TreeListModel` widget
-  - [ ] Subtask 2.2: Implement lazy-loading tree model — use `Gtk.TreeListModel` with a create-model callback that loads children only when a node is expanded
-  - [ ] Subtask 2.3: Use `Gio.File` for directory listing with file/folder type detection
-  - [ ] Subtask 2.4: Use `Gtk.TreeExpander` for expand/collapse rows with folder-open/folder icons via `Gio.content_type_get_icon`
-  - [ ] Subtask 2.5: Use `Gtk.SignalListItemFactory` to bind model data to row widgets
-  - [ ] Subtask 2.6: Exclude `.git` directory from tree — do not load or display `.git` entries in any folder
+- [x] Task 0: Verify and create required event classes (AC: 3)
+  - [x] Subtask 0.1: Read `slate/core/events.py` — check if `OpenFileRequestedEvent(path: str)` exists
+  - [x] Subtask 0.2: Read `slate/core/events.py` — check if `FolderOpenedEvent(path: str)` exists
+  - [x] Subtask 0.3: If either is missing, add the dataclass to `slate/core/events.py`
+- [x] Task 1: Implement FileExplorerPlugin skeleton (AC: 4, 5)
+  - [x] Subtask 1.1: Create `slate/plugins/core/file_explorer.py` with AbstractPlugin subclass
+  - [x] Subtask 1.2: Implement activate(context) — register panel factory, action, keybinding
+  - [x] Subtask 1.3: Register panel with ID "file_explorer", icon "folder-symbolic", label "Explorer"
+  - [x] Subtask 1.4: Register action "explorer.focus" and keybinding Ctrl+Shift+O
+- [x] Task 2: Implement FileExplorerTree widget using modern GTK4 stack (AC: 1, 2, 8)
+  - [x] Subtask 2.1: Create `slate/ui/panels/file_explorer_tree.py` with `Gtk.ListView` + `Gtk.TreeListModel` widget
+  - [x] Subtask 2.2: Implement lazy-loading tree model — use `Gtk.TreeListModel` with a create-model callback that loads children only when a node is expanded
+  - [x] Subtask 2.3: Use `Gio.File` for directory listing with file/folder type detection
+  - [x] Subtask 2.4: Use `Gtk.TreeExpander` for expand/collapse rows with folder-open/folder icons via `Gio.content_type_get_icon`
+  - [x] Subtask 2.5: Use `Gtk.SignalListItemFactory` to bind model data to row widgets
+  - [x] Subtask 2.6: Exclude `.git` directory from tree — do not load or display `.git` entries in any folder
 
-- [ ] Task 3: Wire file opening via EventBus (AC: 3)
-  - [ ] Subtask 3.1: On file activation (double-click or Enter key), emit `OpenFileRequestedEvent(path)`
-  - [ ] Subtask 3.2: Subscribe to `FolderOpenedEvent` to reload tree when folder changes
-  - [ ] Subtask 3.3: Ensure TabManager handles `OpenFileRequestedEvent` (already implemented in Story 1.7)
-- [ ] Task 4: Implement breadcrumb navigation (AC: 7)
-  - [ ] Subtask 4.1: Add `Gtk.Box` with `Gtk.Label` segments separated by "›" at top of panel
-  - [ ] Subtask 4.2: Each segment is a flat `Gtk.Button` — clicking navigates to that parent directory
-- [ ] Task 5: Verify panel container supports new panel type (AC: 1)
-  - [ ] Subtask 5.1: Read `slate/ui/panels/panel_container.py` — verify it accepts a generic `Gtk.Widget`
-  - [ ] Subtask 5.2: Modify only if panel container expects a specific widget type (e.g., TreeView)
-- [ ] Task 6: Write tests (AC: 1-8)
-  - [ ] Subtask 6.1: Create `tests/plugins/test_file_explorer.py` — plugin activation test
-  - [ ] Subtask 6.2: Create `tests/ui/panels/test_file_explorer_tree.py` — tree widget tests
-  - [ ] Subtask 6.3: Test lazy loading: verify only expanded folder's contents are loaded
-  - [ ] Subtask 6.4: Test file click emits OpenFileRequestedEvent with correct path
-  - [ ] Subtask 6.5: Test FolderOpenedEvent triggers tree reload
-  - [ ] Subtask 6.6: Test plugin registration uses only public API (no internal imports)
-  - [ ] Subtask 6.7: Test `.git` directory is excluded from tree
-  - [ ] Subtask 6.8: Test clicking a folder row expands (does not emit OpenFileRequestedEvent)
-  - [ ] Subtask 6.9: Test breadcrumb segments are clickable and navigate to parent directory
+- [x] Task 3: Wire file opening via EventBus (AC: 3)
+  - [x] Subtask 3.1: On file activation (double-click or Enter key), emit `OpenFileRequestedEvent(path)`
+  - [x] Subtask 3.2: Subscribe to `FolderOpenedEvent` to reload tree when folder changes
+  - [x] Subtask 3.3: Ensure TabManager handles `OpenFileRequestedEvent` (already implemented in Story 1.7)
+- [x] Task 4: Implement breadcrumb navigation (AC: 7)
+  - [x] Subtask 4.1: Add `Gtk.Box` with `Gtk.Label` segments separated by "›" at top of panel
+  - [x] Subtask 4.2: Each segment is a flat `Gtk.Button` — clicking navigates to that parent directory
+- [x] Task 5: Verify panel container supports new panel type (AC: 1)
+  - [x] Subtask 5.1: Read `slate/ui/panels/panel_container.py` — verify it accepts a generic `Gtk.Widget`
+  - [x] Subtask 5.2: Modify only if panel container expects a specific widget type (e.g., TreeView)
+- [x] Task 6: Write tests (AC: 1-8)
+  - [x] Subtask 6.1: Create `tests/plugins/test_file_explorer.py` — plugin activation test
+  - [x] Subtask 6.2: Create `tests/ui/panels/test_file_explorer_tree.py` — tree widget tests
+  - [x] Subtask 6.3: Test lazy loading: verify only expanded folder's contents are loaded
+  - [x] Subtask 6.4: Test file click emits OpenFileRequestedEvent with correct path
+  - [x] Subtask 6.5: Test FolderOpenedEvent triggers tree reload
+  - [x] Subtask 6.6: Test plugin registration uses only public API (no internal imports)
+  - [x] Subtask 6.7: Test `.git` directory is excluded from tree
+  - [x] Subtask 6.8: Test clicking a folder row expands (does not emit OpenFileRequestedEvent)
+  - [x] Subtask 6.9: Test breadcrumb segments are clickable and navigate to parent directory
 
 ## Dev Notes
 
@@ -525,13 +525,32 @@ tests/
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+opencode/mimo-v2-pro-free
 
 ### Debug Log References
 
 ### Completion Notes List
 
+- Added `FolderOpenedEvent` to `slate/core/events.py` (was missing, needed for folder change notifications)
+- `OpenFileRequestedEvent` already existed in events.py
+- `Gtk.TreeListModel.new()` uses `create_func` keyword (not `create_model_func`) on GTK 4.6.9
+- `Gtk.Button.set_flat()` not available on GTK 4.6.9 — used CSS class "flat" instead
+- Panel container is a generic `Gtk.Box` — accepts any `Gtk.Widget`, no modification needed
+- Plugin uses `EventBus()` singleton directly (no `event_bus` property on `PluginContext`)
+- `HostUIBridge.register_action()` supports `shortcut` parameter — keybinding registered directly
+- All 289 tests pass (267 existing + 22 new)
+
 ### File List
+
+- `slate/core/events.py` — Added `FolderOpenedEvent` dataclass
+- `slate/plugins/core/file_explorer.py` — Created: `FileExplorerPlugin` (AbstractPlugin)
+- `slate/ui/panels/__init__.py` — Created: empty init for panels package
+- `slate/ui/panels/file_explorer_tree.py` — Created: `FileExplorerTree` widget (ListView + TreeListModel)
+- `tests/plugins/__init__.py` — Created: empty init
+- `tests/plugins/test_file_explorer.py` — Created: 9 plugin tests
+- `tests/ui/panels/__init__.py` — Created: empty init
+- `tests/ui/panels/test_file_explorer_tree.py` — Created: 13 widget tests
+- `tests/core/test_events.py` — Added: 2 FolderOpenedEvent tests
 
 ---
 

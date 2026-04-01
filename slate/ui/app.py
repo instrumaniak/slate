@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import tempfile
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ class SlateApplication(Gtk.Application):
 
     def _on_activate(self, app: Gtk.Application) -> None:
         """Handle application activation."""
-        from slate.services import get_config_service, get_theme_service
+        from slate.services import get_config_service, get_theme_service, get_file_service
         from slate.ui.main_window import create_main_window
 
         # Step 1: Load config
@@ -86,20 +87,64 @@ class SlateApplication(Gtk.Application):
         self._theme_service = get_theme_service()
         self._theme_service.resolve_theme()
 
-        # Step 3: Create window
+        # Step 3: Create window FIRST (provides HostUIBridge for plugins)
+        from slate.services import get_plugin_manager
+
+        plugin_manager = get_plugin_manager()
         self._main_window = create_main_window(
             app,
             self._config_service,
             self._theme_service,
+            plugin_manager,
             test_mode=self._test_mode,
         )
 
-        # Step 4: Activate plugins via PluginManager (if available)
-        try:
-            from slate.services import get_plugin_manager
+        # Step 4: Activate plugins AFTER window exists (so PluginContext can use HostUIBridge)
+        from slate.core.plugin_api import PluginContext
+        from slate.services import get_file_service
 
-            plugin_manager = get_plugin_manager()
+        class AppPluginContext(PluginContext):
+            """Concrete PluginContext that provides access to app services."""
+
+            def __init__(self, config_service, theme_service, host_bridge):
+                self._config_service = config_service
+                self._theme_service = theme_service
+                self._host_bridge = host_bridge
+
+            @property
+            def plugin_id(self) -> str:
+                return "app"
+
+            def get_service(self, service_id: str) -> Any:
+                if service_id == "file":
+                    return get_file_service()
+                if service_id == "config":
+                    return self._config_service
+                if service_id == "theme":
+                    return self._theme_service
+                return None
+
+            def get_config(self, section: str, key: str) -> str:
+                return self._config_service.get(section, key) or ""
+
+            def set_config(self, section: str, key: str, value: str) -> None:
+                self._config_service.set(section, key, value)
+
+            def emit(self, event: Any) -> None:
+                from slate.core.event_bus import EventBus
+
+                EventBus().emit(event)
+
+            @property
+            def host_bridge(self):
+                return self._host_bridge
+
+        context = AppPluginContext(self._config_service, self._theme_service, self._main_window)
+        plugin_manager.context = context
+
+        try:
             plugin_manager.activate_all()
+            self._main_window._refresh_activity_bar()
         except Exception as e:
             logger.warning(f"Plugin activation failed: {e}")
 

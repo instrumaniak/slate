@@ -110,4 +110,9 @@ def get_plugin_manager() -> PluginManager:
         with _plugin_manager_lock:
             if _plugin_manager is None:
                 _plugin_manager = PluginManager()
+                _plugin_manager.register_plugin(
+                    __import__(
+                        "slate.plugins.core.file_explorer", fromlist=["FileExplorerPlugin"]
+                    ).FileExplorerPlugin
+                )
     return _plugin_manager

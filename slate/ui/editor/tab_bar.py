@@ -95,8 +95,12 @@ class TabBar(Gtk.Box):
 
         def on_toggled(_btn) -> None:
             if _btn.get_active():
-                self._active_path = path
-                self.emit("tab-selected", path)
+                if self._active_path != path:
+                    self._active_path = path
+                    self.emit("tab-selected", path)
+            else:
+                if self._active_path == path:
+                    _btn.set_active(True)
 
         tab_button.connect("toggled", on_toggled)
 
@@ -149,8 +153,6 @@ class TabBar(Gtk.Box):
 
         for p, btn in self._tabs.items():
             btn.set_active(p == path)
-
-        self._active_path = path
 
     def get_tabs(self) -> list:
         """Get list of tab paths in order."""

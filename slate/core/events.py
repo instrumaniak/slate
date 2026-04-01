@@ -77,6 +77,13 @@ class TabActivatedEvent(BaseEvent):
 
 
 @dataclass
+class FolderOpenedEvent(BaseEvent):
+    """Emitted when a folder is opened."""
+
+    path: str
+
+
+@dataclass
 class SearchResultsReadyEvent(BaseEvent):
     """Emitted when search results are ready."""
 

@@ -16,16 +16,17 @@ from gi.repository import Gio, Gtk
 logger = logging.getLogger(__name__)
 
 
-def create_main_window(app, config_service, theme_service, test_mode: bool = False):
+def create_main_window(app, config_service, theme_service, plugin_manager, test_mode: bool = False):
     """Factory function to create main window.
 
     Args:
         app: The application instance.
         config_service: The config service.
         theme_service: The theme service.
+        plugin_manager: The plugin manager for activity bar items.
         test_mode: If True, set accessible names for testing.
     """
-    return SlateWindow(app, config_service, theme_service, test_mode=test_mode)
+    return SlateWindow(app, config_service, theme_service, plugin_manager, test_mode=test_mode)
 
 
 class SlateWindow(Gtk.ApplicationWindow):
@@ -36,6 +37,7 @@ class SlateWindow(Gtk.ApplicationWindow):
         app: Gtk.Application,
         config_service: ConfigService,
         theme_service: ThemeService,
+        plugin_manager,
         test_mode: bool = False,
     ) -> None:
         """Initialize SlateWindow.
@@ -44,6 +46,7 @@ class SlateWindow(Gtk.ApplicationWindow):
             app: The application instance.
             config_service: The config service.
             theme_service: The theme service.
+            plugin_manager: The plugin manager for activity bar items.
             test_mode: If True, set accessible names for testing.
         """
         super().__init__(application=app)
@@ -57,6 +60,7 @@ class SlateWindow(Gtk.ApplicationWindow):
 
         self._config_service = config_service
         self._theme_service = theme_service
+        self._plugin_manager = plugin_manager
         self._editor_scheme = "Adwaita"  # Default until theme is resolved
 
         from slate.services import get_file_service
@@ -67,6 +71,12 @@ class SlateWindow(Gtk.ApplicationWindow):
 
         self._tab_manager = TabManager(file_service)
         self._tab_manager.set_close_dialog_callback(self._show_close_dialog)
+
+        from slate.core.event_bus import EventBus
+        from slate.core.events import FileOpenedEvent
+
+        self._event_bus = EventBus()
+        self._event_bus.subscribe(FileOpenedEvent, self._on_file_opened)
 
         self._setup_window_geometry()
         self._apply_theme()
@@ -140,7 +150,7 @@ class SlateWindow(Gtk.ApplicationWindow):
 
     def _setup_main_layout(self) -> None:
         """Set up main window layout with activity bar, side panel, editor."""
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        content_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         content_box.set_hexpand(True)
         content_box.set_vexpand(True)
 
@@ -177,8 +187,42 @@ class SlateWindow(Gtk.ApplicationWindow):
         activity_bar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         activity_bar.set_size_request(48, -1)
         activity_bar.set_css_classes(["toolbar"])
-
+        self._activity_bar_box = activity_bar
+        self._refresh_activity_bar()
         return activity_bar
+
+    def _refresh_activity_bar(self) -> None:
+        """Refresh activity bar with current plugin items."""
+        if not hasattr(self, "_activity_bar_box"):
+            return
+        activity_bar = self._activity_bar_box
+        child = activity_bar.get_first_child()
+        while child is not None:
+            next_child = child.get_next_sibling()
+            activity_bar.remove(child)
+            child = next_child
+
+        if self._plugin_manager is not None:
+            for item in self._plugin_manager.get_activity_bar_items():
+                btn = Gtk.Button()
+                btn.set_icon_name(item.icon_name)
+                btn.set_tooltip_text(item.title)
+                btn.set_css_classes(["flat"])
+                btn.connect(
+                    "clicked", lambda _w, p=item.plugin_id: self._on_activity_bar_item_clicked(p)
+                )
+                activity_bar.append(btn)
+
+    def _on_activity_bar_item_clicked(self, plugin_id: str) -> None:
+        """Handle activity bar item click - show the corresponding panel."""
+        plugin = self._plugin_manager.get_plugin(plugin_id)
+        if plugin and hasattr(plugin, "get_panel_widget"):
+            widget = plugin.get_panel_widget()
+            if widget:
+                child = self._side_panel.get_first_child()
+                if child is not None:
+                    self._side_panel.remove(child)
+                self._side_panel.append(widget)
 
     def _create_side_panel(self) -> Gtk.Box:
         """Create side panel container."""
@@ -255,15 +299,35 @@ class SlateWindow(Gtk.ApplicationWindow):
         if is_folder:
             self._paned.set_visible(True)
             self._side_panel.set_visible(True)
+            self._load_folder_in_explorer(path)
         else:
             self._paned.set_visible(True)
             self._side_panel.set_visible(False)
+            tab = self._tab_manager.open_tab(path)
+            self._tab_bar.add_tab(path, path.split("/")[-1])
+            self._tab_bar.set_active(path)
+            self._create_editor_view_for_tab(path, tab)
 
-        tab = self._tab_manager.open_tab(path)
-        self._tab_bar.add_tab(path, path.split("/")[-1])
-        self._tab_bar.set_active(path)
+    def _load_folder_in_explorer(self, path: str) -> None:
+        """Load a folder into the file explorer panel."""
+        from slate.core.event_bus import EventBus
+        from slate.core.events import FolderOpenedEvent
 
-        self._create_editor_view_for_tab(path, tab)
+        plugin = self._plugin_manager.get_plugin("file_explorer")
+        if plugin and hasattr(plugin, "get_panel_widget"):
+            widget = plugin.get_panel_widget()
+            if widget:
+                child = self._side_panel.get_first_child()
+                if child is not None and child != widget:
+                    self._side_panel.remove(child)
+                if child != widget:
+                    self._side_panel.append(widget)
+                if hasattr(widget, "load_folder"):
+                    widget.load_folder(path)
+                return
+
+        event_bus = EventBus()
+        event_bus.emit(FolderOpenedEvent(path=path))
 
     def _create_editor_view_for_tab(self, path: str, tab: dict) -> None:
         """Create EditorView for a tab and store it."""
@@ -280,6 +344,18 @@ class SlateWindow(Gtk.ApplicationWindow):
 
         if editor_view:
             self._editor_scroll.set_child(editor_view)
+
+    def _on_file_opened(self, event) -> None:
+        """Handle FileOpenedEvent - update tab bar and show editor."""
+        path = event.path
+        tab = self._tab_manager.get_tabs().get(path)
+        if tab:
+            if path not in self._tab_bar.get_tabs():
+                self._tab_bar.add_tab(path, path.split("/")[-1])
+            self._tab_bar.set_active(path)
+            if "editor_view" not in tab:
+                self._create_editor_view_for_tab(path, tab)
+            self._update_editor_for_tab(path)
 
     def _on_editor_modified(self, path: str, is_dirty: bool) -> None:
         """Handle editor buffer modified state change."""
@@ -301,8 +377,6 @@ class SlateWindow(Gtk.ApplicationWindow):
         return dialog.run()
 
     def _register_shortcuts(self) -> None:
-        # Register Gio.SimpleAction shortcuts (no ShortcutController to avoid
-        # interfering with editor focus/click behaviour)
         shortcuts = [
             ("new_tab", "t", self._on_new_tab),
             ("close_tab", "w", self._on_close_tab),
@@ -312,12 +386,38 @@ class SlateWindow(Gtk.ApplicationWindow):
             ("undo", "z", self._on_undo),
             ("redo", "y", self._on_redo),
             ("next_tab", "Tab", self._on_next_tab),
+            ("explorer_focus", "o", self._on_explorer_focus),
         ]
 
         for action_name, _key, callback in shortcuts:
             action = Gio.SimpleAction.new(f"window.{action_name}", None)
             action.connect("activate", lambda *_: callback())
             self.add_action(action)
+
+        shortcut_controller = Gtk.ShortcutController.new()
+        shortcut_controller.set_scope(Gtk.ShortcutScope.GLOBAL)
+
+        shortcuts_to_bind = {
+            "<Primary><Shift>O": "window.explorer_focus",
+            "<Primary>t": "window.new_tab",
+            "<Primary>w": "window.close_tab",
+            "<Primary>s": "window.save_file",
+            "<Primary>o": "window.open_file",
+            "<Primary>b": "window.toggle_panel",
+            "<Primary>z": "window.undo",
+            "<Primary>y": "window.redo",
+            "Tab": "window.next_tab",
+        }
+
+        for key, action in shortcuts_to_bind.items():
+            try:
+                trigger = Gtk.ShortcutTrigger.parse_string(key)
+                shortcut = Gtk.Shortcut.new(trigger, Gtk.NamedAction.new(action))
+                shortcut_controller.add_shortcut(shortcut)
+            except Exception as e:
+                logger.warning(f"Failed to parse shortcut {key}: {e}")
+
+        self.add_controller(shortcut_controller)
 
     def _on_new_tab(self) -> None:
         logger.debug("Keyboard shortcut: new tab")
@@ -338,6 +438,26 @@ class SlateWindow(Gtk.ApplicationWindow):
         if self._config_service:
             self._config_service.set("app", "side_panel_visible", str(not visible).lower())
 
+    def register_panel(
+        self, plugin_id: str, panel_id: str, widget: Any, title: str, icon_name: str
+    ) -> None:
+        """HostUIBridge: Register a panel widget."""
+        pass
+
+    def register_action(
+        self,
+        plugin_id: str,
+        action_id: str,
+        callback: Callable[..., Any],
+        shortcut: str | None = None,
+    ) -> None:
+        """HostUIBridge: Register an action."""
+        pass
+
+    def register_dialog(self, plugin_id: str, dialog_id: str, factory: Callable[..., Any]) -> None:
+        """HostUIBridge: Register a dialog."""
+        pass
+
     def _on_undo(self) -> None:
         logger.debug("Keyboard shortcut: undo")
 
@@ -346,6 +466,20 @@ class SlateWindow(Gtk.ApplicationWindow):
 
     def _on_next_tab(self) -> None:
         logger.debug("Keyboard shortcut: next tab")
+
+    def _on_explorer_focus(self) -> None:
+        """Focus the file explorer panel."""
+        logger.debug("Keyboard shortcut: explorer focus")
+        plugin = self._plugin_manager.get_plugin("file_explorer")
+        if plugin and hasattr(plugin, "get_panel_widget"):
+            widget = plugin.get_panel_widget()
+            if widget:
+                child = self._side_panel.get_first_child()
+                if child is not None:
+                    self._side_panel.remove(child)
+                self._side_panel.append(widget)
+                if hasattr(widget, "grab_focus"):
+                    widget.grab_focus()
 
     def save_geometry(self) -> None:
         if self._config_service is None:

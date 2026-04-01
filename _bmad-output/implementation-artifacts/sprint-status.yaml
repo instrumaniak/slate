@@ -57,7 +57,7 @@ development_status:
 
   # Epic 2: File Explorer & Project Navigation
   epic-2: in-progress
-  2-1-file-explorer-basic-tree-view-navigation: ready-for-dev
+  2-1-file-explorer-basic-tree-view-navigation: done
   2-2-file-explorer-lazy-loading-performance: backlog
   2-3-file-explorer-context-menu-file-operations: backlog
   epic-2-retrospective: optional
