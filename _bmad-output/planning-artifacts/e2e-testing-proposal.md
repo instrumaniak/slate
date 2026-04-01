@@ -25,6 +25,12 @@ Slate currently has unit tests for core/ and services/ layers, but lacks automat
 1. **In-process GTK integration tests** (`tests/ui/gtk/`) — Fast, deterministic, same-process testing for UI flows
 2. **Black-box E2E smoke tests** (`tests/e2e/`) — Launch real app in desktop session, verify via accessibility
 
+**Quality hardening goals (must-haves):**
+
+- UI/E2E tests must assert behavior (state change, events emitted, actions executed), not just widget presence
+- Tests must not rely on private attributes or fragile widget tree shapes
+- GTK tests must run under a predictable session (Xvfb + dbus-run-session for CI; real GNOME session for full AT-SPI)
+
 **Tool choices (verified via web research, March 2026):**
 
 | Layer | Tool | Rationale |
@@ -107,7 +113,11 @@ tests/
 │       ├── test_dialogs.py   # Save/discard dialog
 │       └── test_panel.py     # Side panel toggle
 └── e2e/              # NEW — black-box smoke tests
-    ├── conftest.py           # dogtail setup
+    ├── conftest.py           # dogtail setup + session checks
+    ├── driver/               # shared driver/query layer (extensibility)
+    │   ├── app.py            # launch/teardown helpers
+    │   ├── queries.py        # reusable accessibility queries
+    │   └── actions.py        # reusable actions (prefer doActionNamed)
     ├── test_launch.py        # App launch
     └── test_smoke.py         # Basic UI interactions
 ```
@@ -165,6 +175,10 @@ When `SLATE_TEST_MODE=1`:
 3. **No randomization** — Seed random if used, disable animations
 
 4. **Config isolation** — Use temp directory for config
+
+**Additional test-mode guidance:**
+- Prefer `doActionNamed("click")` when available on AT-SPI nodes, and fall back to coordinate click only if needed
+- Provide stable accessible names for all elements needed by E2E flows
 
 #### Error Handling in Test Mode
 
@@ -581,7 +595,11 @@ def test_app_exits_cleanly(slate_accessible):
             close_button = buttons[-1] if buttons else None
         
         if close_button:
-            close_button.click()
+            # Prefer doActionNamed when present
+            if "click" in close_button.actions:
+                close_button.doActionNamed("click")
+            else:
+                close_button.click()
     except Exception as e:
         pytest.fail(f"Failed to close app via accessibility: {e}")
     
@@ -681,7 +699,7 @@ test-timeout:
 4. **Install script** — add system packages
 5. **Test structure** — create directories and conftest.py
 6. **In-process tests** — write 3-5 GTK integration tests (use PUBLIC API only)
-7. **E2E tests** — write 2-3 smoke tests with proper subprocess handling
+7. **E2E tests** — write 2-3 smoke tests with proper subprocess handling + driver layer
 8. **Negative tests** — add AT-SPI disabled test
 9. **CI setup** — add GitHub Actions workflow
 10. **Verify** — run all tests locally with timeout enforcement
@@ -762,7 +780,30 @@ test:
 
 Use `xvfb-run -a` to auto-assign available display number.
 
-## 13. Full File Change Summary
+## 13. Test Quality Fixes (Required)
+
+These fixes are mandatory to ensure the automated suite catches most regressions without manual verification.
+
+### 13.1 Core Test Hygiene
+- **Reset EventBus between tests** to avoid singleton leakage (add a fixture in `tests/conftest.py`).
+- **Avoid private attributes in tests** (e.g., `_tab_manager`, `_tree_model`); add or use public APIs/actions instead.
+- **Prefer behavior assertions** over widget-tree shape assertions (e.g., “action toggles panel visibility” vs “widget is Gtk.Paned”).
+
+### 13.2 GTK/UI Test Stability
+- **Run GTK tests under a known session**: use `xvfb-run --auto-servernum dbus-run-session -- pytest tests/ui/gtk/ -v` in CI.
+- **Move `tests/ui/panels/` under GTK harness** or wrap them in a GTK app fixture to prevent segfaults.
+- **Use main-loop pumping** for async GTK state changes rather than fixed sleeps.
+
+### 13.3 E2E Reliability
+- **Headless smoke tests**: only verify process lifecycle + `SLATE_READY` in CI.
+- **Full AT-SPI tests**: run on a GNOME desktop runner (self-hosted) with accessibility enabled.
+- **Driver layer required**: all E2E tests must use `tests/e2e/driver/*` helpers (queries/actions) for consistency and maintainability.
+
+### 13.4 Acceptance Gates
+- E2E tests must cover: app launch, window present, at least one action flow (e.g., toggle side panel), and graceful exit.
+- UI tests must cover: tab open/close flow, save/discard dialog path, and panel toggle state changes.
+
+## 14. Full File Change Summary
 
 ### New Files
 
@@ -776,6 +817,9 @@ Use `xvfb-run -a` to auto-assign available display number.
 | `tests/ui/gtk/test_panel.py` | Panel toggle tests |
 | `tests/e2e/__init__.py` | Package marker |
 | `tests/e2e/conftest.py` | dogtail fixtures |
+| `tests/e2e/driver/app.py` | E2E launch/teardown helpers |
+| `tests/e2e/driver/queries.py` | Reusable accessibility queries |
+| `tests/e2e/driver/actions.py` | Reusable accessibility actions |
 | `tests/e2e/test_launch.py` | Launch tests |
 | `tests/e2e/test_smoke.py` | Smoke tests |
 
@@ -787,6 +831,8 @@ Use `xvfb-run -a` to auto-assign available display number.
 | `pyproject.toml` | Add test-gtk, test-e2e dependencies |
 | `scripts/install-deps.sh` | Add xvfb, at-spi2-core, dogtail |
 | `Makefile` | Add test-unit, test-gtk, test-e2e, test-all targets |
+| `tests/conftest.py` | Reset EventBus fixture |
+| `tests/ui/panels/*` | Move under GTK harness or wrap with app fixture |
 
 ### No Changes Required
 
@@ -799,13 +845,14 @@ Use `xvfb-run -a` to auto-assign available display number.
 
 ---
 
-## 14. References
+## 15. References
 
 - dogtail: https://pypi.org/project/dogtail/
 - pytest-xvfb: https://github.com/The-Compiler/pytest-xvfb
 - GTK4 Accessibility: https://docs.gtk.org/gtk4/section-accessibility.html
 - AT-SPI Python: https://gnome.pages.gitlab.gnome.org/at-spi2-core/devel-docs/atspi-python-stack.html
 - Ubuntu accessibility: https://documentation.ubuntu.com/desktop/en/latest/explanation/accessibility-stack/
+- Automation through Accessibility (GNOME): https://modehnal.github.io/
 
 ---
 
