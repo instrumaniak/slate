@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-25T06:14:00.000Z
-last_updated: 2026-03-31
+last_updated: 2026-04-01
 project: slate
 project_key: NOKEY
 tracking_system: file-system
@@ -57,7 +57,7 @@ development_status:
 
   # Epic 2: File Explorer & Project Navigation
   epic-2: in-progress
-  2-1-file-explorer-basic-tree-view-navigation: backlog
+  2-1-file-explorer-basic-tree-view-navigation: ready-for-dev
   2-2-file-explorer-lazy-loading-performance: backlog
   2-3-file-explorer-context-menu-file-operations: backlog
   epic-2-retrospective: optional
