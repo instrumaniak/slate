@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import signal
 import sys
 import tempfile
 from typing import Any
@@ -46,6 +47,7 @@ class SlateApplication(Gtk.Application):
         self._theme_service = None
         self._file_service = None
         self._main_window = None
+        self._ready_emitted = False
 
         if self._test_mode:
             self._setup_test_config()
@@ -71,13 +73,22 @@ class SlateApplication(Gtk.Application):
 
     def _emit_ready_signal(self) -> bool:
         """Emit ready signal after main loop starts."""
+        if self._ready_emitted:
+            return False
+        self._ready_emitted = True
         print("SLATE_READY", file=sys.stderr)
         sys.stderr.flush()
         return False
 
     def _on_activate(self, app: Gtk.Application) -> None:
         """Handle application activation."""
-        from slate.services import get_config_service, get_theme_service, get_file_service
+        if self._main_window is not None:
+            self._main_window.present()
+            if self._test_mode:
+                self._emit_ready_signal()
+            return
+
+        from slate.services import get_config_service, get_file_service, get_theme_service
         from slate.ui.main_window import create_main_window
 
         # Step 1: Load config
@@ -98,10 +109,11 @@ class SlateApplication(Gtk.Application):
             plugin_manager,
             test_mode=self._test_mode,
         )
+        if self._test_mode:
+            self._emit_ready_signal()
 
         # Step 4: Activate plugins AFTER window exists (so PluginContext can use HostUIBridge)
         from slate.core.plugin_api import PluginContext
-        from slate.services import get_file_service
 
         class AppPluginContext(PluginContext):
             """Concrete PluginContext that provides access to app services."""
@@ -171,6 +183,7 @@ class SlateApplication(Gtk.Application):
         if self._test_mode:
             from gi.repository import GLib
 
+            self._emit_ready_signal()
             GLib.idle_add(self._emit_ready_signal)
 
     def _process_cli_args(self) -> str | None:
@@ -210,6 +223,9 @@ def main(test_mode: bool = False) -> int:
 
     app = SlateApplication(test_mode=test_mode)
     app.register(None)
+    if test_mode:
+        signal.signal(signal.SIGTERM, lambda *_: app.quit())
+        app.activate()
 
     return app.run(None)
 

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from slate.services.config_service import ConfigService
@@ -89,18 +90,34 @@ class SlateWindow(Gtk.ApplicationWindow):
     def _set_accessible_names(self) -> None:
         """Set accessible names for test automation."""
         try:
-            accessible = self.get_accessible()
-            if accessible:
-                accessible.set_name("slate-main-window")
+            from gi.repository import GLib
+
+            def apply() -> bool:
+                Gtk.Accessible.update_property(
+                    self,
+                    [Gtk.AccessibleProperty.LABEL],
+                    ["Slate"],
+                )
+                return False
+
+            GLib.idle_add(apply)
         except (AttributeError, TypeError):
             pass
 
     def _try_set_accessible_name(self, widget, name: str) -> None:
         """Try to set accessible name on a widget, silently fail if not supported."""
         try:
-            accessible = widget.get_accessible()
-            if accessible:
-                accessible.set_name(name)
+            from gi.repository import GLib
+
+            def apply() -> bool:
+                Gtk.Accessible.update_property(
+                    widget,
+                    [Gtk.AccessibleProperty.LABEL],
+                    [name],
+                )
+                return False
+
+            GLib.idle_add(apply)
         except (AttributeError, TypeError):
             pass
 
@@ -187,6 +204,8 @@ class SlateWindow(Gtk.ApplicationWindow):
         activity_bar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         activity_bar.set_size_request(48, -1)
         activity_bar.set_css_classes(["toolbar"])
+        if self._test_mode:
+            self._try_set_accessible_name(activity_bar, "slate-activity-bar")
         self._activity_bar_box = activity_bar
         self._refresh_activity_bar()
         return activity_bar
@@ -202,8 +221,12 @@ class SlateWindow(Gtk.ApplicationWindow):
             activity_bar.remove(child)
             child = next_child
 
+        items = []
         if self._plugin_manager is not None:
-            for item in self._plugin_manager.get_activity_bar_items():
+            items = list(self._plugin_manager.get_activity_bar_items())
+
+        if items:
+            for item in items:
                 btn = Gtk.Button()
                 btn.set_icon_name(item.icon_name)
                 btn.set_tooltip_text(item.title)
@@ -212,6 +235,16 @@ class SlateWindow(Gtk.ApplicationWindow):
                     "clicked", lambda _w, p=item.plugin_id: self._on_activity_bar_item_clicked(p)
                 )
                 activity_bar.append(btn)
+        elif self._test_mode:
+            test_btn = Gtk.Button(label="Test")
+            self._try_set_accessible_name(test_btn, "slate-test-activity")
+            activity_bar.append(test_btn)
+
+            quit_btn = Gtk.Button(label="Quit")
+            quit_btn.set_css_classes(["flat"])
+            quit_btn.connect("clicked", lambda *_: self._on_quit_app())
+            self._try_set_accessible_name(quit_btn, "slate-quit-app")
+            activity_bar.append(quit_btn)
 
     def _on_activity_bar_item_clicked(self, plugin_id: str) -> None:
         """Handle activity bar item click - show the corresponding panel."""
@@ -388,6 +421,8 @@ class SlateWindow(Gtk.ApplicationWindow):
             ("next_tab", "Tab", self._on_next_tab),
             ("explorer_focus", "o", self._on_explorer_focus),
         ]
+        if self._test_mode:
+            shortcuts.append(("quit_app", "q", self._on_quit_app))
 
         for action_name, _key, callback in shortcuts:
             action = Gio.SimpleAction.new(f"window.{action_name}", None)
@@ -408,6 +443,8 @@ class SlateWindow(Gtk.ApplicationWindow):
             "<Primary>y": "window.redo",
             "Tab": "window.next_tab",
         }
+        if self._test_mode:
+            shortcuts_to_bind["<Primary>q"] = "window.quit_app"
 
         for key, action in shortcuts_to_bind.items():
             try:
@@ -437,6 +474,24 @@ class SlateWindow(Gtk.ApplicationWindow):
 
         if self._config_service:
             self._config_service.set("app", "side_panel_visible", str(not visible).lower())
+
+    def _on_quit_app(self) -> None:
+        app = self.get_application()
+        if app is not None:
+            app.quit()
+        else:
+            self.close()
+
+    def get_tab_state(self) -> dict[str, Any]:
+        """Get read-only tab state for testing."""
+        return {
+            "paths": self._tab_manager.get_tab_list(),
+            "active": self._tab_manager.get_active_tab(),
+        }
+
+    def has_tab_bar(self) -> bool:
+        """Return True if the tab bar widget is available."""
+        return self._tab_bar is not None
 
     def register_panel(
         self, plugin_id: str, panel_id: str, widget: Any, title: str, icon_name: str
@@ -498,6 +553,8 @@ class SlateWindow(Gtk.ApplicationWindow):
 
     def _on_close_request(self, *args) -> None:
         self.save_geometry()
+        if self._test_mode:
+            return False
 
         dirty_tabs = [
             path for path, tab in self._tab_manager.get_tabs().items() if tab.get("is_dirty", False)

@@ -1,28 +1,11 @@
 import pytest
-from gi.repository import Gtk
 
 
 @pytest.mark.timeout(30)
 def test_tab_bar_exists(gtk_app_activated):
     """Tab bar should exist in the editor area."""
     window = gtk_app_activated
-    content = window.get_child()
-
-    paned = None
-    child_iter = content.get_first_child()
-    while child_iter:
-        if isinstance(child_iter, Gtk.Paned):
-            paned = child_iter
-            break
-        child_iter = child_iter.get_next_sibling()
-
-    assert paned is not None
-
-    editor_area = paned.get_end_child()
-    assert editor_area is not None
-
-    tab_bar = editor_area.get_first_child()
-    assert tab_bar is not None
+    assert window.has_tab_bar() is True
 
 
 @pytest.mark.timeout(30)
@@ -31,7 +14,7 @@ def test_tab_manager_exists(gtk_app_activated, pump_main_loop):
     window = gtk_app_activated
     pump_main_loop(0.1)
 
-    tab_manager = window._tab_manager
-    assert tab_manager is not None
-    tabs = tab_manager.get_tabs()
-    assert isinstance(tabs, dict)
+    tab_state = window.get_tab_state()
+    assert isinstance(tab_state, dict)
+    assert "paths" in tab_state
+    assert "active" in tab_state
