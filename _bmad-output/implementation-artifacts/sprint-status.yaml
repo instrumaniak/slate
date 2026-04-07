@@ -59,7 +59,7 @@ development_status:
   epic-2: in-progress
   2-1-file-explorer-basic-tree-view-navigation: done
   2-2-file-explorer-lazy-loading-performance: done
-  2-3-file-explorer-context-menu-file-operations: backlog
+  2-3-file-explorer-context-menu-file-operations: ready-for-dev
   epic-2-retrospective: optional
 
   # Epic 3: Source Control & Code Review
