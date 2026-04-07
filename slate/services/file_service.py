@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import shutil
 from typing import Any
 
 from slate.core.event_bus import EventBus
@@ -48,6 +49,19 @@ class FileService:
         self._lock = threading.RLock()
         self._monitor: Any = None
         self._monitor_path: str | None = None
+
+    def _validate_child_name(self, name: str) -> str:
+        """Validate a direct child name for create and rename operations."""
+        if name is None:
+            raise TypeError("name cannot be None")
+
+        candidate = name.strip()
+        if not candidate:
+            raise ValueError("name cannot be empty")
+        if "/" in candidate or "\x00" in candidate:
+            raise ValueError("name cannot contain / or null bytes")
+
+        return candidate
 
     def list_directory(self, path: str) -> list[FileStatus]:
         """List files and folders with metadata.
@@ -171,6 +185,94 @@ class FileService:
             EventBus().emit(FileSavedEvent(path=resolved))
         except Exception as e:
             logger.warning(f"Failed to emit FileSavedEvent: {e}")
+
+    def create_file(self, parent_path: str, name: str) -> str:
+        """Create an empty file inside a directory and return the full path."""
+        candidate = self._validate_child_name(name)
+
+        parent = _validate_path(parent_path)
+        if not os.path.isdir(parent):
+            raise NotADirectoryError(f"Not a directory: {parent_path}")
+
+        target = os.path.abspath(os.path.join(parent, candidate))
+        if os.path.exists(target):
+            raise FileExistsError(f"File already exists: {target}")
+
+        with self._lock:
+            with open(target, "w", encoding="utf-8"):
+                pass
+
+        return target
+
+    def create_folder(self, parent_path: str, name: str) -> str:
+        """Create a folder inside a directory and return the full path."""
+        candidate = self._validate_child_name(name)
+
+        parent = _validate_path(parent_path)
+        if not os.path.isdir(parent):
+            raise NotADirectoryError(f"Not a directory: {parent_path}")
+
+        target = os.path.abspath(os.path.join(parent, candidate))
+        if os.path.exists(target):
+            raise FileExistsError(f"Folder already exists: {target}")
+
+        with self._lock:
+            os.makedirs(target, exist_ok=False)
+
+        return target
+
+    def delete_file(self, path: str) -> None:
+        """Delete a file from disk."""
+        resolved = _validate_path(path)
+        if not os.path.exists(resolved):
+            raise FileNotFoundError(f"File not found: {path}")
+        if not os.path.isfile(resolved):
+            raise IsADirectoryError(f"Path is a directory: {path}")
+
+        with self._lock:
+            os.remove(resolved)
+
+    def delete_folder(self, path: str) -> None:
+        """Delete a folder recursively from disk."""
+        resolved = _validate_path(path)
+        if not os.path.exists(resolved):
+            raise FileNotFoundError(f"Folder not found: {path}")
+        if not os.path.isdir(resolved):
+            raise NotADirectoryError(f"Not a directory: {path}")
+
+        with self._lock:
+            shutil.rmtree(resolved)
+
+    def rename(self, old_path: str, new_name: str) -> str:
+        """Rename a file or folder within the same parent directory."""
+        candidate = self._validate_child_name(new_name)
+
+        resolved_old = _validate_path(old_path)
+        if not os.path.exists(resolved_old):
+            raise FileNotFoundError(f"Path not found: {old_path}")
+
+        parent = os.path.dirname(resolved_old)
+        target = os.path.abspath(os.path.join(parent, candidate))
+        if target == resolved_old:
+            return target
+        if os.path.exists(target):
+            raise FileExistsError(f"Target already exists: {target}")
+
+        with self._lock:
+            os.rename(resolved_old, target)
+
+        return target
+
+    def count_immediate_children(self, path: str) -> int:
+        """Count immediate children of a directory."""
+        resolved = _validate_path(path)
+        if not os.path.exists(resolved):
+            raise FileNotFoundError(f"Directory not found: {path}")
+        if not os.path.isdir(resolved):
+            raise NotADirectoryError(f"Not a directory: {path}")
+
+        with self._lock:
+            return sum(1 for _ in os.scandir(resolved))
 
     def monitor_directory(self, path: str) -> Any:
         """Start GIO FileMonitor on a directory (inotify, zero polling).

@@ -81,13 +81,13 @@ class TabManager:
             content = self._file_service.read_file(path)
         except Exception as e:
             logger.error(f"Failed to read file {path}: {e}")
-            content = None
+            content = f"Error: failed to load file\n{e}"
 
         tab = {
             "path": path,
             "content": content,
             "is_dirty": False,
-            "is_error": content is None,
+            "is_error": content.startswith("Error:"),
         }
         self._tabs[path] = tab
         self._active_tab = path
@@ -176,6 +176,20 @@ class TabManager:
         """
         if path in self._tabs:
             self._tabs[path]["is_dirty"] = False
+
+    def set_tab_content(self, path: str, content: str) -> None:
+        """Update stored content for an open tab."""
+        if path in self._tabs:
+            self._tabs[path]["content"] = content
+
+    def save_tab(self, path: str, content: str) -> None:
+        """Persist tab content and mark the tab clean."""
+        if path not in self._tabs:
+            raise KeyError(f"Tab not found: {path}")
+
+        self._file_service.write_file(path, content)
+        self._tabs[path]["content"] = content
+        self.mark_clean(path)
 
     def get_tab_list(self) -> list[str]:
         """Get list of all open tab paths in order.

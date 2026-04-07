@@ -95,6 +95,32 @@ font = PartialFont 14
             # Should have defaults, not crash
             assert service.get("editor", "font") == DEFAULT_CONFIG["editor"]["font"]
 
+    def test_restores_from_valid_backup_when_primary_is_corrupted(self):
+        """Corrupted primary config should restore from a valid backup when available."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config_path = Path(tmp_dir) / "config.ini"
+            backup_path = config_path.with_suffix(".ini.backup")
+
+            config_path.write_text("[INVALID\n")
+            backup_path.write_text("[app]\ncolor_mode = dark\n")
+
+            with patch("slate.services.config_service.shutil.copy2", side_effect=OSError("copy")):
+                service = ConfigService(config_path=str(config_path))
+
+            assert service.get("app", "color_mode") == "dark"
+
+    def test_uses_home_fallback_when_path_home_fails(self, monkeypatch):
+        """When Path.home fails, ConfigService should fall back to HOME or tempdir."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            monkeypatch.setenv("HOME", tmp_dir)
+            with patch(
+                "slate.services.config_service.Path.home", side_effect=RuntimeError("no home")
+            ):
+                service = ConfigService(config_path=None)
+
+            expected = Path(tmp_dir) / ".config" / "slate" / "config.ini"
+            assert service._config_path == expected
+
 
 class TestConfigServiceGet:
     """Test ConfigService.get() method."""
@@ -304,6 +330,26 @@ class TestConfigServiceGetAll:
 
             all_config = service.get_all()
             assert all_config["custom_section"]["custom_key"] == "custom_value"
+
+
+class TestConfigServiceSaveFailures:
+    """Test error handling while persisting config."""
+
+    def test_save_permission_error_cleans_temp_file(self) -> None:
+        """Permission errors during save should bubble up and leave no temp file."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config_path = Path(tmp_dir) / "config.ini"
+            config_path.write_text("[app]\ncolor_mode = system\n")
+            service = ConfigService(config_path=str(config_path))
+
+            temp_path = config_path.with_suffix(".ini.tmp")
+            with patch(
+                "slate.services.config_service.os.open", side_effect=PermissionError("denied")
+            ):
+                with pytest.raises(PermissionError):
+                    service.set("app", "color_mode", "dark")
+
+            assert not temp_path.exists()
 
 
 class TestConfigServiceDefaults:

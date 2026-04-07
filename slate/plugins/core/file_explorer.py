@@ -65,6 +65,7 @@ class FileExplorerPlugin(AbstractPlugin):
         """Create factory for lazy widget instantiation."""
         file_service = self._file_service
         config_service = self._config_service
+        bridge = self._context.host_bridge if self._context is not None else None
 
         def create_widget() -> FileExplorerTree:
             from slate.core.event_bus import EventBus
@@ -74,6 +75,7 @@ class FileExplorerPlugin(AbstractPlugin):
                 file_service=file_service,
                 event_bus=EventBus(),
                 config_service=config_service,
+                host_bridge=bridge,
             )
 
         return create_widget

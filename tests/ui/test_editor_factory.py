@@ -80,3 +80,13 @@ class TestEditorViewFactorySingleton:
         factory1 = EditorViewFactory()
         factory2 = EditorViewFactory()
         assert factory1 is factory2
+
+
+class TestEditorViewFactoryBufferFallback:
+    """Test buffer creation when language is unknown."""
+
+    def test_unknown_language_falls_back_to_plain_buffer(self):
+        factory = EditorViewFactory()
+        buffer = factory.create_buffer("content", language_id="does-not-exist")
+
+        assert buffer is not None

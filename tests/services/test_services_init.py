@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from slate.services import ConfigService, ThemeService, get_config_service, get_theme_service
+from slate.services import (
+    ConfigService,
+    GitService,
+    ThemeService,
+    get_config_service,
+    get_git_service,
+    get_theme_service,
+)
 
 
 class TestServiceRegistration:
@@ -23,6 +30,14 @@ class TestServiceRegistration:
 
         assert service1 is service2
         assert isinstance(service1, ThemeService)
+
+    def test_get_git_service_returns_singleton(self):
+        """get_git_service should return same instance on multiple calls."""
+        service1 = get_git_service()
+        service2 = get_git_service()
+
+        assert service1 is service2
+        assert isinstance(service1, GitService)
 
     def test_theme_service_uses_config_service(self):
         """ThemeService singleton should use ConfigService singleton."""
@@ -50,6 +65,8 @@ class TestServiceExports:
         from slate.services import __all__
 
         assert "ConfigService" in __all__
+        assert "GitService" in __all__
         assert "ThemeService" in __all__
         assert "get_config_service" in __all__
+        assert "get_git_service" in __all__
         assert "get_theme_service" in __all__

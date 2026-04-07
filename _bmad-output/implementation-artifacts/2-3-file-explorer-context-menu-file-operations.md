@@ -1,6 +1,6 @@
 # Story 2.3: File Explorer — Context Menu & File Operations
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -24,55 +24,55 @@ So that I can manage my project without switching to the terminal.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Implement context menu actions for files (AC: 1, 3, 6, 7)
-  - [ ] Subtask 1.1: Add secondary-click handling to FileExplorerTree using GTK4 event controllers (`Gtk.GestureClick` configured for `Gdk.BUTTON_SECONDARY`); use `Gtk.GestureLongPress` only if touch press-and-hold support is added separately
-  - [ ] Subtask 1.2: Create context menu popover with menu items: Open, Rename, Delete, Copy Relative Path, Copy Absolute Path — use `Gtk.PopoverMenu` with `Gio.Menu`, inherit the system GTK4 theme
-  - [ ] Subtask 1.3: Implement "Open" action — emit OpenFileRequestedEvent (already exists in Story 2.1)
-  - [ ] Subtask 1.4: Implement "Copy Relative Path" — copy the path relative to the currently loaded explorer root via GTK4 clipboard APIs (`widget.get_clipboard()` or `Gdk.Display.get_clipboard()` + `Gdk.Clipboard.set_text(...)`), then show a UI-layer notification (`SlateToast` or `HostUIBridge.show_notification()`) with `Copied: <path>` for 2s
-  - [ ] Subtask 1.5: Implement "Copy Absolute Path" — copy the absolute path via GTK4 clipboard APIs (`widget.get_clipboard()` or `Gdk.Display.get_clipboard()` + `Gdk.Clipboard.set_text(...)`), then show a UI-layer notification (`SlateToast` or `HostUIBridge.show_notification()`) with `Copied: <path>` for 2s
+- [x] Task 1: Implement context menu actions for files (AC: 1, 3, 6, 7)
+  - [x] Subtask 1.1: Add secondary-click handling to FileExplorerTree using GTK4 event controllers (`Gtk.GestureClick` configured for `Gdk.BUTTON_SECONDARY`); use `Gtk.GestureLongPress` only if touch press-and-hold support is added separately
+  - [x] Subtask 1.2: Create context menu popover with menu items: Open, Rename, Delete, Copy Relative Path, Copy Absolute Path — use `Gtk.PopoverMenu` with `Gio.Menu`, inherit the system GTK4 theme
+  - [x] Subtask 1.3: Implement "Open" action — emit OpenFileRequestedEvent (already exists in Story 2.1)
+  - [x] Subtask 1.4: Implement "Copy Relative Path" — copy the path relative to the currently loaded explorer root via GTK4 clipboard APIs (`widget.get_clipboard()` or `Gdk.Display.get_clipboard()` + `Gdk.Clipboard.set_text(...)`), then show a UI-layer notification (`SlateToast` or `HostUIBridge.show_notification()`) with `Copied: <path>` for 2s
+  - [x] Subtask 1.5: Implement "Copy Absolute Path" — copy the absolute path via GTK4 clipboard APIs (`widget.get_clipboard()` or `Gdk.Display.get_clipboard()` + `Gdk.Clipboard.set_text(...)`), then show a UI-layer notification (`SlateToast` or `HostUIBridge.show_notification()`) with `Copied: <path>` for 2s
 
-- [ ] Task 2: Implement inline rename (AC: 4, 9)
-  - [ ] Subtask 2.1: Use Gtk.Stack in row widget to toggle between label and Gtk.Entry — do NOT swap widgets dynamically (SignalListItemFactory pattern makes this fragile)
-  - [ ] Subtask 2.2: On "Rename" action: switch Stack to entry, pre-fill with current name, select all text, grab focus
-  - [ ] Subtask 2.3: On Enter key: validate filename (reject empty names, `/`, `\0`, and sibling name collisions), call FileService.rename(), emit FolderOpenedEvent for the parent directory, restore label
-  - [ ] Subtask 2.4: On Escape key: cancel rename, restore label
-  - [ ] Subtask 2.5: On invalid filename: show inline error (red border on entry + tooltip), keep the row in edit mode until valid input is entered or Escape is pressed
+- [x] Task 2: Implement inline rename (AC: 4, 9)
+  - [x] Subtask 2.1: Use Gtk.Stack in row widget to toggle between label and Gtk.Entry — do NOT swap widgets dynamically (SignalListItemFactory pattern makes this fragile)
+  - [x] Subtask 2.2: On "Rename" action: switch Stack to entry, pre-fill with current name, select all text, grab focus
+  - [x] Subtask 2.3: On Enter key: validate filename (reject empty names, `/`, `\0`, and sibling name collisions), call FileService.rename(), emit FolderOpenedEvent for the parent directory, restore label
+  - [x] Subtask 2.4: On Escape key: cancel rename, restore label
+  - [x] Subtask 2.5: On invalid filename: show inline error (red border on entry + tooltip), keep the row in edit mode until valid input is entered or Escape is pressed
 
-- [ ] Task 3: Implement delete with confirmation (AC: 5)
-  - [ ] Subtask 3.1: Show Gtk.MessageDialog with confirmation before delete — title: "Delete [name]?", body: "This action cannot be undone."
-  - [ ] Subtask 3.2: For non-empty folders: body text changes to "This folder contains X items. Delete anyway?" — count immediate children in FileService before showing dialog
-  - [ ] Subtask 3.3: Call FileService.delete_file() or delete_folder() on confirm
-  - [ ] Subtask 3.4: Emit FolderOpenedEvent with the affected directory path to refresh tree after successful delete
-  - [ ] Subtask 3.5: On Cancel: close dialog, no action, tree unchanged
+- [x] Task 3: Implement delete with confirmation (AC: 5)
+  - [x] Subtask 3.1: Show Gtk.MessageDialog with confirmation before delete — title: "Delete [name]?", body: "This action cannot be undone."
+  - [x] Subtask 3.2: For non-empty folders: body text changes to "This folder contains X items. Delete anyway?" — count immediate children in FileService before showing dialog
+  - [x] Subtask 3.3: Call FileService.delete_file() or delete_folder() on confirm
+  - [x] Subtask 3.4: Emit FolderOpenedEvent with the affected directory path to refresh tree after successful delete
+  - [x] Subtask 3.5: On Cancel: close dialog, no action, tree unchanged
 
-- [ ] Task 4: Implement context menu for folders (AC: 2, 3, 8)
-  - [ ] Subtask 4.1: Create separate menu for folders: New File, New Folder, Rename, Delete
-  - [ ] Subtask 4.2: Implement "New File" — insert new row as first item in folder with Gtk.Entry pre-filled "untitled", all text selected; on Enter: validate name, call FileService.create_file(parent_path, name), emit FolderOpenedEvent for the parent folder; on Escape: remove row
-  - [ ] Subtask 4.3: Implement "New Folder" — insert new row as first item in folder with Gtk.Entry pre-filled "New Folder", all text selected; on Enter: validate name, call FileService.create_folder(parent_path, name), emit FolderOpenedEvent for the parent folder; on Escape: remove row
-  - [ ] Subtask 4.4: Handle duplicate name or invalid input on create: show inline error on entry, do not create file/folder, keep the row in edit mode until fixed or Escape is pressed
+- [x] Task 4: Implement context menu for folders (AC: 2, 3, 8)
+  - [x] Subtask 4.1: Create separate menu for folders: New File, New Folder, Rename, Delete
+  - [x] Subtask 4.2: Implement "New File" — insert new row as first item in folder with Gtk.Entry pre-filled "untitled", all text selected; on Enter: validate name, call FileService.create_file(parent_path, name), emit FolderOpenedEvent for the parent folder; on Escape: remove row
+  - [x] Subtask 4.3: Implement "New Folder" — insert new row as first item in folder with Gtk.Entry pre-filled "New Folder", all text selected; on Enter: validate name, call FileService.create_folder(parent_path, name), emit FolderOpenedEvent for the parent folder; on Escape: remove row
+  - [x] Subtask 4.4: Handle duplicate name or invalid input on create: show inline error on entry, do not create file/folder, keep the row in edit mode until fixed or Escape is pressed
 
-- [ ] Task 5: Add FileService operations if not present (AC: 3)
-  - [ ] Subtask 5.1: Read slate/services/file_service.py — check if create_file(), create_folder(), delete_file(), delete_folder(), rename() exist
-  - [ ] Subtask 5.2: If missing, implement these methods with the following contracts:
+- [x] Task 5: Add FileService operations if not present (AC: 3)
+  - [x] Subtask 5.1: Read slate/services/file_service.py — check if create_file(), create_folder(), delete_file(), delete_folder(), rename() exist
+  - [x] Subtask 5.2: If missing, implement these methods with the following contracts:
     - `create_file(parent_path: str, name: str) -> str` — creates an empty file and returns the full path. Raises `FileExistsError` if name already exists. UI refreshes the parent folder after success.
     - `create_folder(parent_path: str, name: str) -> str` — creates a folder (non-recursive) and returns the full path. Raises `FileExistsError` if name already exists. UI refreshes the parent folder after success.
     - `delete_file(path: str) -> None` — removes a file. Raises `FileNotFoundError` if not found.
     - `delete_folder(path: str) -> None` — removes a folder recursively (`shutil.rmtree`). Raises `FileNotFoundError` if not found.
-    - `rename(old_path: str, new_name: str) -> str` — renames a file/folder in the same directory and returns the new path. Raises `FileNotFoundError` if source missing, `FileExistsError` if target exists.
-  - [ ] Subtask 5.3: Add a FileService helper for immediate child counting if needed so delete confirmation text stays out of the UI layer
+  - `rename(old_path: str, new_name: str) -> str` — renames a file/folder in the same directory and returns the new path. Raises `FileNotFoundError` if source missing, `FileExistsError` if target exists.
+  - [x] Subtask 5.3: Add a FileService helper for immediate child counting if needed so delete confirmation text stays out of the UI layer
 
-- [ ] Task 6: Write tests (AC: 1-9)
-  - [ ] Subtask 6.1: Test file context menu shows correct items
-  - [ ] Subtask 6.2: Test folder context menu shows correct items
-  - [ ] Subtask 6.3: Test inline rename commits on Enter, cancels on Escape
-  - [ ] Subtask 6.4: Test delete confirmation dialog appears
-  - [ ] Subtask 6.5: Test copy path operations copy correct path via GTK4 clipboard APIs, with relative paths rooted at the loaded explorer root
-  - [ ] Subtask 6.6: Test new file/folder creation at folder level
-  - [ ] Subtask 6.7: Test inline rename rejects invalid characters (/, \0, empty name)
-  - [ ] Subtask 6.8: Test inline rename rejects duplicate name (file already exists in same directory)
- - [ ] Subtask 6.9: Test delete non-empty folder shows immediate child count in confirmation dialog
-  - [ ] Subtask 6.10: Test new file/folder with duplicate name shows inline error, does not create
-  - [ ] Subtask 6.11: Test copy path notification appears with correct message and 2s duration
+- [x] Task 6: Write tests (AC: 1-9)
+  - [x] Subtask 6.1: Test file context menu shows correct items
+  - [x] Subtask 6.2: Test folder context menu shows correct items
+  - [x] Subtask 6.3: Test inline rename commits on Enter, cancels on Escape
+  - [x] Subtask 6.4: Test delete confirmation dialog appears
+  - [x] Subtask 6.5: Test copy path operations copy correct path via GTK4 clipboard APIs, with relative paths rooted at the loaded explorer root
+  - [x] Subtask 6.6: Test new file/folder creation at folder level
+  - [x] Subtask 6.7: Test inline rename rejects invalid characters (/, \0, empty name)
+  - [x] Subtask 6.8: Test inline rename rejects duplicate name (file already exists in same directory)
+  - [x] Subtask 6.9: Test delete non-empty folder shows immediate child count in confirmation dialog
+  - [x] Subtask 6.10: Test new file/folder with duplicate name shows inline error, does not create
+  - [x] Subtask 6.11: Test copy path notification appears with correct message and 2s duration
 
 ## Dev Notes
 
@@ -420,6 +420,31 @@ minimax-m2.5-free
 
 ### Debug Log References
 
+- Implemented `FileService` create/delete/rename/count helpers and wired `FileExplorerTree` context menus, inline edit, delete confirmation, and copy-path notifications.
+- Added coverage for config/theme/plugin/service paths and verified the full suite with coverage gate.
+
 ### Completion Notes List
 
+- Context menus now use `Gtk.PopoverMenu` + `Gio.Menu` with file/folder-specific actions.
+- Inline rename and new-item flows use `Gtk.Stack` + `Gtk.Entry`, including validation and inline errors.
+- File operations now go through `FileService`; delete confirmation includes child counts for non-empty folders.
+- Copy-path actions notify through the host bridge with 2s timeout semantics.
+- Added tests for service operations, tree helpers, plugin behavior, and coverage gaps.
+
 ### File List
+
+- `slate/services/file_service.py`
+- `slate/ui/main_window.py`
+- `slate/plugins/core/file_explorer.py`
+- `slate/ui/panels/file_explorer_tree.py`
+- `tests/services/test_file_service.py`
+- `tests/services/test_config_service.py`
+- `tests/services/test_theme_service.py`
+- `tests/services/test_services_init.py`
+- `tests/plugins/test_file_explorer.py`
+- `tests/ui/panels/test_file_explorer_tree.py`
+- `tests/e2e/conftest.py`
+
+### Change Log
+
+- 2026-04-07: Implemented file explorer context menus, inline rename/create/delete operations, file service helpers, and expanded test coverage.

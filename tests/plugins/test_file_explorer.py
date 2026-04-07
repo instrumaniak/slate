@@ -140,6 +140,20 @@ class TestPluginActivation:
         _activate_with_mock_panel(plugin, context)
         assert plugin._file_service is context._file_service
 
+    def test_activate_aborts_without_file_service(self, plugin: FileExplorerPlugin) -> None:
+        """Plugin should not activate if the file service is missing."""
+
+        class NoFileContext(MockPluginContext):
+            def get_service(self, service_id: str) -> Any:
+                if service_id == "file":
+                    return None
+                return super().get_service(service_id)
+
+        context = NoFileContext()
+        plugin.activate(context)
+
+        assert plugin._panel_factory is None
+
     def test_get_panel_widget_lazy_creates(
         self, plugin: FileExplorerPlugin, context: MockPluginContext
     ) -> None:
@@ -162,6 +176,23 @@ class TestPluginActivation:
         widget1 = plugin.get_panel_widget()
         widget2 = plugin.get_panel_widget()
         assert widget1 is widget2
+
+    def test_get_panel_widget_without_factory_returns_none(self) -> None:
+        """get_panel_widget should return None before activation."""
+        plugin = FileExplorerPlugin()
+
+        assert plugin.get_panel_widget() is None
+
+    def test_focus_panel_calls_host_bridge(
+        self, plugin: FileExplorerPlugin, context: MockPluginContext
+    ) -> None:
+        """_focus_panel should ask the host bridge to focus the explorer panel."""
+        _activate_with_mock_panel(plugin, context)
+
+        context.host_bridge.focus_panel = MagicMock()
+        plugin._focus_panel()
+
+        context.host_bridge.focus_panel.assert_called_once_with("file_explorer")
 
 
 class TestPluginApiCompliance:
@@ -197,3 +228,35 @@ class TestPluginApiCompliance:
             assert not isinstance(event, FileOpenedEvent), (
                 "Plugin must not emit FileOpenedEvent directly"
             )
+
+    def test_toggle_hidden_files_updates_config_and_panel(
+        self, plugin: FileExplorerPlugin, context: MockPluginContext
+    ) -> None:
+        """Hidden-files toggle should update both the widget and config."""
+        _activate_with_mock_panel(plugin, context)
+
+        panel = MagicMock()
+        plugin._panel_widget = panel
+        context._config_service.get.return_value = "false"
+
+        plugin._toggle_hidden_files()
+
+        panel.toggle_hidden_files.assert_called_once()
+        context._config_service.set.assert_called_with(
+            "plugin.file_explorer", "show_hidden_files", "true"
+        )
+
+    def test_toggle_hidden_files_logs_config_failure(
+        self, plugin: FileExplorerPlugin, context: MockPluginContext
+    ) -> None:
+        """Config persistence failures should be logged without raising."""
+        _activate_with_mock_panel(plugin, context)
+
+        panel = MagicMock()
+        plugin._panel_widget = panel
+        context._config_service.get.return_value = "false"
+        context._config_service.set.side_effect = Exception("persist failed")
+
+        plugin._toggle_hidden_files()
+
+        panel.toggle_hidden_files.assert_called_once()

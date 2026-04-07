@@ -48,6 +48,15 @@ class TestThemeServiceInitialization:
 
         assert color_mode == "system"
 
+    def test_falls_back_to_system_when_config_raises(self):
+        """Config exceptions should fall back to system mode."""
+        mock_config = Mock()
+        mock_config.get.side_effect = Exception("boom")
+
+        service = ThemeService(config_service=mock_config)
+
+        assert service.resolve_theme()[0] == "system"
+
 
 class TestThemeServiceResolveTheme:
     """Test ThemeService.resolve_theme() method."""
@@ -292,6 +301,34 @@ class TestThemeServiceSystemDetection:
                 result = service._detect_system_theme()
                 assert result is False
 
+    def test_detect_system_theme_prefers_dark_and_sets_watcher(self):
+        """gsettings prefer-dark should return True and connect watcher."""
+        mock_config = Mock()
+        mock_config.get.return_value = "system"
+        service = ThemeService(config_service=mock_config)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="'prefer-dark'\n")
+            with patch.object(service, "_setup_gtk_theme_watcher") as watcher:
+                assert service._detect_system_theme() is True
+                watcher.assert_called_once()
+
+    def test_detect_system_theme_gtk_dark_fallback(self):
+        """When gsettings is unavailable, Gtk.Settings dark preference should be used."""
+        mock_config = Mock()
+        mock_config.get.return_value = "system"
+        service = ThemeService(config_service=mock_config)
+
+        mock_settings = MagicMock()
+        mock_settings.get_property.return_value = True
+
+        with patch("subprocess.run", side_effect=FileNotFoundError("gsettings missing")):
+            with patch("gi.require_version"):
+                with patch("gi.repository.Gtk.Settings.get_default", return_value=mock_settings):
+                    with patch.object(service, "_setup_gtk_theme_watcher") as watcher:
+                        assert service._detect_system_theme() is True
+                        watcher.assert_called_once()
+
 
 class TestThemeServiceOnModeChanged:
     """Test theme change callback registration."""
@@ -443,6 +480,38 @@ class TestThemeServiceEditorScheme:
         _, _, editor_scheme = service.resolve_theme()
 
         assert editor_scheme == "Solarized-light"
+
+    def test_falls_back_to_default_scheme_when_config_raises(self):
+        """Scheme lookup errors should fall back to built-in defaults."""
+        mock_config = Mock()
+        mock_config.get.side_effect = Exception("scheme error")
+
+        service = ThemeService(config_service=mock_config)
+
+        assert service._get_editor_scheme(is_dark=False) == "Adwaita"
+        assert service._get_editor_scheme(is_dark=True) == "Adwaita-dark"
+
+
+class TestThemeServiceWatcherLifecycle:
+    """Test GTK watcher registration and shutdown."""
+
+    def test_setup_watcher_connects_once_and_shutdown_disconnects(self):
+        """Watcher should connect once and disconnect during shutdown."""
+        mock_config = Mock()
+        mock_config.get.return_value = "system"
+        mock_settings = MagicMock()
+        mock_settings.connect.return_value = 42
+
+        service = ThemeService(config_service=mock_config)
+
+        with patch("gi.require_version"):
+            with patch("gi.repository.Gtk.Settings.get_default", return_value=mock_settings):
+                service._setup_gtk_theme_watcher()
+                service._setup_gtk_theme_watcher()
+                service.shutdown()
+
+        mock_settings.connect.assert_called_once()
+        mock_settings.disconnect.assert_called_with(42)
 
 
 class TestThemeServiceZeroGtkImports:

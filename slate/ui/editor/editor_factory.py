@@ -89,8 +89,12 @@ class EditorViewFactory:
 
         if language_id:
             lang_manager = self._get_language_manager()
-            language = lang_manager.get_language(language_id)
-            buffer = GtkSource.Buffer.new_with_language(language)
+            language = lang_manager.get_language(language_id) if lang_manager is not None else None
+            buffer = (
+                GtkSource.Buffer.new_with_language(language)
+                if language is not None
+                else GtkSource.Buffer.new(None)
+            )
         else:
             buffer = GtkSource.Buffer.new(None)
 

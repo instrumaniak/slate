@@ -46,5 +46,5 @@ def test_panel_toggle_exists(gtk_app_activated):
     """Toggle panel action should exist."""
     window = gtk_app_activated
 
-    action = window.lookup_action("window.toggle_panel")
+    action = window.lookup_action("toggle_panel")
     assert action is not None

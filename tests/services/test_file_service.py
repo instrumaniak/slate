@@ -387,3 +387,116 @@ class TestFileServiceThreadSafety:
         assert not errors, f"Errors during concurrent writes: {errors}"
         files = list(tmp_path.glob("thread_*_*.txt"))
         assert len(files) == 50
+
+
+class TestFileServiceOperations:
+    """Test create/delete/rename helpers."""
+
+    def test_create_file_returns_path(self, tmp_path: Path) -> None:
+        """create_file should create an empty file and return the full path."""
+        service = FileService()
+        created = service.create_file(str(tmp_path), "new.txt")
+
+        assert created == str((tmp_path / "new.txt").resolve())
+        assert (tmp_path / "new.txt").read_text() == ""
+
+    def test_create_folder_returns_path(self, tmp_path: Path) -> None:
+        """create_folder should create a folder and return the full path."""
+        service = FileService()
+        created = service.create_folder(str(tmp_path), "docs")
+
+        assert created == str((tmp_path / "docs").resolve())
+        assert (tmp_path / "docs").is_dir()
+
+    def test_create_file_duplicate_raises(self, tmp_path: Path) -> None:
+        """create_file should reject duplicate names."""
+        (tmp_path / "dup.txt").write_text("content")
+        service = FileService()
+
+        with pytest.raises(FileExistsError):
+            service.create_file(str(tmp_path), "dup.txt")
+
+    def test_create_file_rejects_invalid_name(self, tmp_path: Path) -> None:
+        """create_file should reject empty and path-like names."""
+        service = FileService()
+
+        with pytest.raises(ValueError):
+            service.create_file(str(tmp_path), "")
+
+        with pytest.raises(ValueError):
+            service.create_file(str(tmp_path), "bad/name")
+
+    def test_create_folder_duplicate_raises(self, tmp_path: Path) -> None:
+        """create_folder should reject duplicate names."""
+        (tmp_path / "docs").mkdir()
+        service = FileService()
+
+        with pytest.raises(FileExistsError):
+            service.create_folder(str(tmp_path), "docs")
+
+    def test_delete_file(self, tmp_path: Path) -> None:
+        """delete_file should remove a file."""
+        file_path = tmp_path / "remove.txt"
+        file_path.write_text("content")
+
+        service = FileService()
+        service.delete_file(str(file_path))
+
+        assert not file_path.exists()
+
+    def test_delete_folder_recursive(self, tmp_path: Path) -> None:
+        """delete_folder should remove nested content recursively."""
+        folder = tmp_path / "folder"
+        nested = folder / "nested"
+        nested.mkdir(parents=True)
+        (nested / "file.txt").write_text("content")
+
+        service = FileService()
+        service.delete_folder(str(folder))
+
+        assert not folder.exists()
+
+    def test_rename_file(self, tmp_path: Path) -> None:
+        """rename should move a file within the same directory."""
+        old_path = tmp_path / "old.txt"
+        old_path.write_text("content")
+
+        service = FileService()
+        new_path = service.rename(str(old_path), "new.txt")
+
+        assert new_path == str((tmp_path / "new.txt").resolve())
+        assert not old_path.exists()
+        assert (tmp_path / "new.txt").read_text() == "content"
+
+    def test_rename_rejects_invalid_name(self, tmp_path: Path) -> None:
+        """rename should reject invalid new names."""
+        old_path = tmp_path / "old.txt"
+        old_path.write_text("content")
+
+        service = FileService()
+
+        with pytest.raises(ValueError):
+            service.rename(str(old_path), "bad/name")
+
+    def test_rename_folder(self, tmp_path: Path) -> None:
+        """rename should move a folder within the same parent."""
+        old_folder = tmp_path / "old-folder"
+        old_folder.mkdir()
+
+        service = FileService()
+        new_path = service.rename(str(old_folder), "new-folder")
+
+        assert new_path == str((tmp_path / "new-folder").resolve())
+        assert not old_folder.exists()
+        assert (tmp_path / "new-folder").is_dir()
+
+    def test_count_immediate_children(self, tmp_path: Path) -> None:
+        """count_immediate_children should count only direct children."""
+        (tmp_path / "a.txt").write_text("")
+        nested = tmp_path / "nested"
+        nested.mkdir()
+        (nested / "b.txt").write_text("")
+
+        service = FileService()
+
+        assert service.count_immediate_children(str(tmp_path)) == 2

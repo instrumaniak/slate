@@ -63,6 +63,8 @@ class SlateWindow(Gtk.ApplicationWindow):
         self._theme_service = theme_service
         self._plugin_manager = plugin_manager
         self._editor_scheme = "Adwaita"  # Default until theme is resolved
+        self._overlay = Gtk.Overlay()
+        self._toast = None
 
         from slate.services import get_file_service
 
@@ -299,7 +301,8 @@ class SlateWindow(Gtk.ApplicationWindow):
 
         editor_area.append(self._editor_scroll)
 
-        return editor_area
+        self._overlay.set_child(editor_area)
+        return self._overlay
 
     def _on_tab_selected(self, tab_bar, path: str) -> None:
         """Handle tab selection."""
@@ -308,6 +311,12 @@ class SlateWindow(Gtk.ApplicationWindow):
 
     def _on_tab_close_requested(self, tab_bar, path: str) -> None:
         """Handle tab close request."""
+        tab = self._tab_manager.get_tabs().get(path)
+        if tab is not None:
+            editor_view = tab.get("editor_view")
+            if editor_view is not None:
+                self._tab_manager.set_tab_content(path, editor_view.get_content())
+
         closed = self._tab_manager.close_tab(path)
         if closed:
             tab = self._tab_manager.get_tabs().get(path, {})
@@ -425,26 +434,26 @@ class SlateWindow(Gtk.ApplicationWindow):
             shortcuts.append(("quit_app", "q", self._on_quit_app))
 
         for action_name, _key, callback in shortcuts:
-            action = Gio.SimpleAction.new(f"window.{action_name}", None)
-            action.connect("activate", lambda *_: callback())
+            action = Gio.SimpleAction.new(action_name, None)
+            action.connect("activate", lambda *_args, cb=callback: cb())
             self.add_action(action)
 
         shortcut_controller = Gtk.ShortcutController.new()
         shortcut_controller.set_scope(Gtk.ShortcutScope.GLOBAL)
 
         shortcuts_to_bind = {
-            "<Primary><Shift>O": "window.explorer_focus",
-            "<Primary>t": "window.new_tab",
-            "<Primary>w": "window.close_tab",
-            "<Primary>s": "window.save_file",
-            "<Primary>o": "window.open_file",
-            "<Primary>b": "window.toggle_panel",
-            "<Primary>z": "window.undo",
-            "<Primary>y": "window.redo",
-            "Tab": "window.next_tab",
+            "<Primary><Shift>O": "win.explorer_focus",
+            "<Primary>t": "win.new_tab",
+            "<Primary>w": "win.close_tab",
+            "<Primary>s": "win.save_file",
+            "<Primary>o": "win.open_file",
+            "<Primary>b": "win.toggle_panel",
+            "<Primary>z": "win.undo",
+            "<Primary>y": "win.redo",
+            "Tab": "win.next_tab",
         }
         if self._test_mode:
-            shortcuts_to_bind["<Primary>q"] = "window.quit_app"
+            shortcuts_to_bind["<Primary>q"] = "win.quit_app"
 
         for key, action in shortcuts_to_bind.items():
             try:
@@ -463,7 +472,22 @@ class SlateWindow(Gtk.ApplicationWindow):
         logger.debug("Keyboard shortcut: close tab")
 
     def _on_save_file(self) -> None:
-        logger.debug("Keyboard shortcut: save file")
+        path = self._tab_manager.get_active_tab()
+        if path is None:
+            return
+
+        tab = self._tab_manager.get_tabs().get(path)
+        if tab is None:
+            return
+
+        editor_view = tab.get("editor_view")
+        if editor_view is None:
+            return
+
+        content = editor_view.get_content()
+        self._tab_manager.save_tab(path, content)
+        editor_view.mark_clean()
+        self._tab_bar.set_dirty(path, False)
 
     def _on_open_file(self) -> None:
         logger.debug("Keyboard shortcut: open file")
@@ -512,6 +536,17 @@ class SlateWindow(Gtk.ApplicationWindow):
     def register_dialog(self, plugin_id: str, dialog_id: str, factory: Callable[..., Any]) -> None:
         """HostUIBridge: Register a dialog."""
         pass
+
+    def show_notification(self, message: str, timeout_ms: int = 3000) -> None:
+        """HostUIBridge: Show a toast notification."""
+        from slate.ui.toast import SlateToast
+
+        if self._toast is None:
+            self._overlay = Gtk.Overlay()
+            self._toast = SlateToast(self._overlay)
+
+        duration = max(1, round(timeout_ms / 1000))
+        self._toast.show(message, duration=duration)
 
     def _on_undo(self) -> None:
         logger.debug("Keyboard shortcut: undo")

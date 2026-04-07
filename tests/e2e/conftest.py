@@ -133,8 +133,11 @@ def slate_app_subprocess(require_display, require_dbus, require_atspi):
 @pytest.fixture
 def slate_accessible(slate_app_subprocess, require_atspi):
     """Get accessible root for Slate app."""
-    from dogtail.predicate import GenericPredicate
-    from dogtail.tree import root
+    try:
+        from dogtail.predicate import GenericPredicate
+        from dogtail.tree import root
+    except ValueError as exc:
+        pytest.skip(f"AT-SPI helper unavailable in this environment: {exc}")
 
     preferred_names = ["Slate", "slate", "com.slate.editor", "python3"]
 
@@ -150,7 +153,10 @@ def slate_accessible(slate_app_subprocess, require_atspi):
             # Fallback: find any application that owns a Slate frame/window.
             for app in apps:
                 for child in getattr(app, "children", []):
-                    if getattr(child, "roleName", None) in {"window", "frame"} and child.name == "Slate":
+                    if (
+                        getattr(child, "roleName", None) in {"window", "frame"}
+                        and child.name == "Slate"
+                    ):
                         return app
         except Exception:
             pass

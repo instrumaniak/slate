@@ -29,6 +29,17 @@ class TestTabManagerBasics:
         assert tab["content"] == "file content"
         assert tab["is_dirty"] is False
 
+    def test_open_tab_handles_read_error(self):
+        """Opening a tab should not crash on unreadable content."""
+        mock_file_service = Mock()
+        mock_file_service.read_file.side_effect = ValueError("File is not valid UTF-8")
+
+        tm = TabManager(file_service=mock_file_service)
+        tab = tm.open_tab("/test/binary.coverage")
+
+        assert tab["is_error"] is True
+        assert tab["content"].startswith("Error: failed to load file")
+
     def test_duplicate_tab_returns_existing(self):
         """Opening same path should return existing tab."""
         mock_file_service = Mock()
