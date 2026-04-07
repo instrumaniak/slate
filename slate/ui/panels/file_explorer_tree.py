@@ -16,6 +16,7 @@ from slate.core.events import FolderOpenedEvent, OpenFileRequestedEvent  # noqa:
 if TYPE_CHECKING:
     from slate.core.event_bus import EventBus
     from slate.services.file_service import FileService
+    from slate.services.config_service import ConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -37,15 +38,27 @@ class FileExplorerTree(Gtk.Box):
     Gtk.TreeView is deprecated since GTK 4.10.
     """
 
-    def __init__(self, file_service: FileService, event_bus: EventBus) -> None:
+    def __init__(
+        self,
+        file_service: FileService,
+        event_bus: EventBus,
+        config_service: ConfigService | None = None,
+    ) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
         self._file_service = file_service
         self._event_bus = event_bus
+        self._config_service = config_service
         self._root_path: str | None = None
         self._load_error: str | None = None
 
+        self._show_hidden_files = False
+        if config_service is not None:
+            value = config_service.get("plugin.file_explorer", "show_hidden_files")
+            self._show_hidden_files = value == "true"
+
         self._breadcrumb_box = self._build_breadcrumb()
-        self.append(self._breadcrumb_box)
+        self._header_box = self._build_header()
+        self.append(self._header_box)
 
         self._error_label = Gtk.Label()
         self._error_label.set_css_classes(["error-label"])
@@ -130,6 +143,63 @@ class FileExplorerTree(Gtk.Box):
         self._breadcrumb_inner_box = box
         return scrolled
 
+    def _build_header(self) -> Gtk.Box:
+        """Create header with breadcrumb bar and menu button."""
+        header_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        header_box.set_hexpand(True)
+
+        header_box.append(self._breadcrumb_box)
+
+        menu_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        menu_box.set_hexpand(True)
+        menu_box.set_margin_start(8)
+        menu_box.set_margin_end(4)
+        menu_box.set_margin_top(2)
+        menu_box.set_margin_bottom(2)
+
+        spacer = Gtk.Box()
+        spacer.set_hexpand(True)
+        menu_box.append(spacer)
+
+        self._menu_button = Gtk.MenuButton()
+        self._menu_button.set_icon_name("view-more-symbolic")
+        self._menu_button.set_tooltip_text("View options")
+        self._menu_button.set_css_classes(["flat"])
+
+        popover = Gtk.Popover()
+        self._menu_button.set_popover(popover)
+
+        popover_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        popover_box.set_margin_start(12)
+        popover_box.set_margin_end(12)
+        popover_box.set_margin_top(8)
+        popover_box.set_margin_bottom(8)
+
+        self._hidden_check = Gtk.CheckButton(label="Show Hidden Files")
+        self._hidden_check.set_active(self._show_hidden_files)
+        self._hidden_check.connect("toggled", self._on_hidden_check_toggled)
+        popover_box.append(self._hidden_check)
+
+        popover.set_child(popover_box)
+
+        menu_box.append(self._menu_button)
+        header_box.append(menu_box)
+
+        return header_box
+
+    def _on_hidden_check_toggled(self, check_button: Gtk.CheckButton) -> None:
+        """Handle checkbox toggle."""
+        self._show_hidden_files = check_button.get_active()
+        if self._root_path is not None:
+            self.load_folder(self._root_path)
+
+        if self._config_service is not None:
+            value = "true" if self._show_hidden_files else "false"
+            try:
+                self._config_service.set("plugin.file_explorer", "show_hidden_files", value)
+            except Exception as e:
+                logger.warning(f"Failed to persist hidden files preference: {e}")
+
     def _update_breadcrumb(self, path: str) -> None:
         """Update breadcrumb bar to show current folder path."""
         inner_box = self._breadcrumb_inner_box
@@ -207,6 +277,8 @@ class FileExplorerTree(Gtk.Box):
             basename = os.path.basename(entry.path)
             if basename == ".git":
                 continue
+            if not self._show_hidden_files and basename.startswith("."):
+                continue
             store.append(
                 FileTreeItem(
                     name=basename,
@@ -280,3 +352,16 @@ class FileExplorerTree(Gtk.Box):
     def _on_file_open_request(self, event: OpenFileRequestedEvent) -> None:
         """Handle file open request from event bus."""
         pass
+
+    def toggle_hidden_files(self) -> None:
+        """Toggle hidden files visibility and reload the tree."""
+        self._show_hidden_files = not self._show_hidden_files
+        if self._root_path is not None:
+            self.load_folder(self._root_path)
+
+        if self._config_service is not None:
+            value = "true" if self._show_hidden_files else "false"
+            try:
+                self._config_service.set("plugin.file_explorer", "show_hidden_files", value)
+            except Exception as e:
+                logger.warning(f"Failed to persist hidden files preference: {e}")

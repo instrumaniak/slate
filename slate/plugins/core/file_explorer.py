@@ -43,6 +43,7 @@ class FileExplorerPlugin(AbstractPlugin):
             logger.error("Required 'file' service not found. FileExplorerPlugin cannot activate.")
             return
 
+        self._config_service = context.get_service("config")
         self._panel_factory = self._create_panel_factory()
 
         bridge = context.host_bridge
@@ -54,9 +55,16 @@ class FileExplorerPlugin(AbstractPlugin):
             shortcut="<Primary><Shift>O",
         )
 
+        bridge.register_action(
+            plugin_id=self.plugin_id,
+            action_id="explorer.toggle_hidden_files",
+            callback=self._toggle_hidden_files,
+        )
+
     def _create_panel_factory(self) -> Callable[[], FileExplorerTree]:
         """Create factory for lazy widget instantiation."""
         file_service = self._file_service
+        config_service = self._config_service
 
         def create_widget() -> FileExplorerTree:
             from slate.core.event_bus import EventBus
@@ -65,6 +73,7 @@ class FileExplorerPlugin(AbstractPlugin):
             return FileExplorerTree(
                 file_service=file_service,
                 event_bus=EventBus(),
+                config_service=config_service,
             )
 
         return create_widget
@@ -83,3 +92,16 @@ class FileExplorerPlugin(AbstractPlugin):
         bridge = getattr(self._context, "host_bridge", None)
         if bridge and hasattr(bridge, "focus_panel"):
             bridge.focus_panel(self.plugin_id)
+
+    def _toggle_hidden_files(self) -> None:
+        """Toggle hidden files visibility in the file explorer panel."""
+        if self._panel_widget is not None and hasattr(self._panel_widget, "toggle_hidden_files"):
+            self._panel_widget.toggle_hidden_files()
+
+        if self._config_service is not None:
+            current = self._config_service.get("plugin.file_explorer", "show_hidden_files")
+            new_value = "false" if current == "true" else "true"
+            try:
+                self._config_service.set("plugin.file_explorer", "show_hidden_files", new_value)
+            except Exception as e:
+                logger.warning(f"Failed to persist hidden files preference: {e}")

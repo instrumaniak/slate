@@ -53,6 +53,7 @@ class MockPluginContext(PluginContext):
     def __init__(self) -> None:
         self._bridge = MockHostBridge()
         self._file_service = MagicMock()
+        self._config_service = MagicMock()
         self._emitted_events: list[Any] = []
 
     @property
@@ -62,6 +63,8 @@ class MockPluginContext(PluginContext):
     def get_service(self, service_id: str) -> Any:
         if service_id == "file":
             return self._file_service
+        if service_id == "config":
+            return self._config_service
         raise KeyError(f"Unknown service: {service_id}")
 
     def get_config(self, section: str, key: str) -> str:
@@ -117,9 +120,9 @@ class TestPluginActivation:
         _activate_with_mock_panel(plugin, context)
 
         actions = context._bridge.registered_actions
-        assert len(actions) == 1
-        assert actions[0]["action_id"] == "explorer.focus"
-        assert actions[0]["plugin_id"] == "file_explorer"
+        focus_actions = [a for a in actions if a["action_id"] == "explorer.focus"]
+        assert len(focus_actions) == 1
+        assert focus_actions[0]["plugin_id"] == "file_explorer"
 
     def test_activate_registers_keybinding(
         self, plugin: FileExplorerPlugin, context: MockPluginContext

@@ -91,13 +91,11 @@ class TestFileExplorerTreeCreation:
 
         widget = FileExplorerTree(file_service=mock_file_service, event_bus=event_bus)
         first_child = widget.get_first_child()
-        assert isinstance(first_child, Gtk.ScrolledWindow), (
-            "First child must be breadcrumb ScrolledWindow"
+        assert isinstance(first_child, Gtk.Box), "First child must be header Box"
+        breadcrumb_box = first_child.get_first_child()
+        assert isinstance(breadcrumb_box, Gtk.ScrolledWindow), (
+            "Header box must contain breadcrumb ScrolledWindow"
         )
-        viewport = first_child.get_child()
-        assert isinstance(viewport, Gtk.Viewport), "ScrolledWindow must contain a Viewport"
-        inner_box = viewport.get_child()
-        assert isinstance(inner_box, Gtk.Box), "Viewport must contain breadcrumb Box"
 
 
 class TestLoadFolder:

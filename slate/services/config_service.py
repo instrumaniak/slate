@@ -50,6 +50,9 @@ DEFAULT_CONFIG: dict[str, dict[str, str]] = {
     "plugin.source_control": {
         "auto_refresh": "true",
     },
+    "plugin.file_explorer": {
+        "show_hidden_files": "false",
+    },
 }
 
 # Reserved characters that could cause INI injection or parsing issues

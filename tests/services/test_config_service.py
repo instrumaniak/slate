@@ -311,8 +311,14 @@ class TestConfigServiceDefaults:
 
     def test_default_config_has_all_required_sections(self):
         """DEFAULT_CONFIG should have editor, app, and plugin sections."""
-        required_sections = {"editor", "app", "plugin.search", "plugin.source_control"}
-        assert set(DEFAULT_CONFIG.keys()) == required_sections
+        required_sections = {
+            "editor",
+            "app",
+            "plugin.search",
+            "plugin.source_control",
+            "plugin.file_explorer",
+        }
+        assert required_sections.issubset(set(DEFAULT_CONFIG.keys()))
 
     def test_default_config_values_are_strings(self):
         """All DEFAULT_CONFIG values should be strings (for configparser)."""
@@ -353,9 +359,12 @@ class TestConfigServiceDefaults:
             "plugin.source_control": {
                 "auto_refresh": "true",
             },
+            "plugin.file_explorer": {
+                "show_hidden_files": "false",
+            },
         }
 
-        assert expected == DEFAULT_CONFIG
+        assert DEFAULT_CONFIG == expected
 
 
 class TestConfigServiceEdgeCases:
