@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-25T06:14:00.000Z
-last_updated: 2026-04-07
+last_updated: 2026-04-08T08:30:00.000Z
 project: slate
 project_key: NOKEY
 tracking_system: file-system
@@ -56,15 +56,15 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 2: File Explorer & Project Navigation
-  epic-2: in-progress
+  epic-2: done
   2-1-file-explorer-basic-tree-view-navigation: done
   2-2-file-explorer-lazy-loading-performance: done
   2-3-file-explorer-context-menu-file-operations: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   # Epic 3: Source Control & Code Review
   epic-3: backlog
-  3-1-diff-view-component: backlog
+  3-1-diff-view-component: ready-for-dev
   3-2-source-control-git-status-file-listing: backlog
   3-3-source-control-inline-diff-viewing: backlog
   3-4-source-control-staging-commit-workflow: backlog
