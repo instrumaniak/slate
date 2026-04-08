@@ -40,7 +40,7 @@ class SlateToast:
             self._dismiss_timer_id = None
 
         self._label.set_label(message)
-        self._revealer.set_revealed(True)
+        self._revealer.set_reveal_child(True)
         self._dismiss_timer_id = GLib.timeout_add_seconds(duration, self._dismiss_timeout)
 
     def show_with_action(
@@ -59,8 +59,12 @@ class SlateToast:
         self.show(message, duration)
 
     def dismiss(self) -> None:
-        self._revealer.set_revealed(False)
+        if self._dismiss_timer_id is not None:
+            GLib.source_remove(self._dismiss_timer_id)
+            self._dismiss_timer_id = None
+        self._revealer.set_reveal_child(False)
 
     def _dismiss_timeout(self) -> bool:
-        self._revealer.set_revealed(False)
+        self._dismiss_timer_id = None
+        self._revealer.set_reveal_child(False)
         return False

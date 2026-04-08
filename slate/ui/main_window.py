@@ -205,7 +205,7 @@ class SlateWindow(Gtk.ApplicationWindow):
         """Create activity bar with panel navigation."""
         activity_bar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         activity_bar.set_size_request(48, -1)
-        activity_bar.set_css_classes(["toolbar"])
+        activity_bar.set_css_classes(["toolbar", "activity-bar"])
         if self._test_mode:
             self._try_set_accessible_name(activity_bar, "slate-activity-bar")
         self._activity_bar_box = activity_bar
@@ -255,9 +255,23 @@ class SlateWindow(Gtk.ApplicationWindow):
             widget = plugin.get_panel_widget()
             if widget:
                 child = self._side_panel.get_first_child()
-                if child is not None:
+                if (
+                    plugin_id == "file_explorer"
+                    and child is widget
+                    and self._side_panel.get_visible()
+                ):
+                    self._side_panel.set_visible(False)
+                    if self._config_service:
+                        self._config_service.set("app", "side_panel_visible", "false")
+                    return
+
+                if child is not None and child is not widget:
                     self._side_panel.remove(child)
-                self._side_panel.append(widget)
+                if child is not widget:
+                    self._side_panel.append(widget)
+                self._side_panel.set_visible(True)
+                if self._config_service:
+                    self._config_service.set("app", "side_panel_visible", "true")
 
     def _create_side_panel(self) -> Gtk.Box:
         """Create side panel container."""
@@ -314,7 +328,7 @@ class SlateWindow(Gtk.ApplicationWindow):
         tab = self._tab_manager.get_tabs().get(path)
         if tab is not None:
             editor_view = tab.get("editor_view")
-            if editor_view is not None:
+            if editor_view is not None and hasattr(editor_view, "get_content"):
                 self._tab_manager.set_tab_content(path, editor_view.get_content())
 
         closed = self._tab_manager.close_tab(path)
@@ -344,11 +358,25 @@ class SlateWindow(Gtk.ApplicationWindow):
             self._load_folder_in_explorer(path)
         else:
             self._paned.set_visible(True)
-            self._side_panel.set_visible(False)
             tab = self._tab_manager.open_tab(path)
+            if tab.get("is_error"):
+                self._side_panel.set_visible(True)
+                self._show_file_open_error(path, tab.get("content", ""))
+                return
             self._tab_bar.add_tab(path, path.split("/")[-1])
             self._tab_bar.set_active(path)
             self._create_editor_view_for_tab(path, tab)
+            parent_path = os.path.dirname(os.path.abspath(path))
+            self._side_panel.set_visible(True)
+            if (
+                parent_path
+                and os.path.isdir(parent_path)
+                and os.path.dirname(parent_path) != parent_path
+            ):
+                try:
+                    self._load_folder_in_explorer(parent_path)
+                except Exception as e:
+                    logger.warning(f"Failed to load parent folder {parent_path}: {e}")
 
     def _load_folder_in_explorer(self, path: str) -> None:
         """Load a folder into the file explorer panel."""
@@ -375,6 +403,16 @@ class SlateWindow(Gtk.ApplicationWindow):
         """Create EditorView for a tab and store it."""
         from slate.ui.editor.editor_view import EditorView
 
+        if tab.get("is_error"):
+            from slate.ui.editor.error_placeholder import ErrorPlaceholder
+
+            message = tab.get("content", "Failed to open file")
+            details = message.split("\n", 1)[1].strip() if "\n" in message else message
+            editor_view = ErrorPlaceholder("Could not open file", details)
+            tab["editor_view"] = editor_view
+            self._editor_scroll.set_child(editor_view)
+            return
+
         editor_view = EditorView(
             path=path,
             content=tab.get("content", ""),
@@ -392,12 +430,23 @@ class SlateWindow(Gtk.ApplicationWindow):
         path = event.path
         tab = self._tab_manager.get_tabs().get(path)
         if tab:
+            if tab.get("is_error"):
+                self._show_file_open_error(path, tab.get("content", ""))
             if path not in self._tab_bar.get_tabs():
                 self._tab_bar.add_tab(path, path.split("/")[-1])
             self._tab_bar.set_active(path)
             if "editor_view" not in tab:
                 self._create_editor_view_for_tab(path, tab)
             self._update_editor_for_tab(path)
+
+    def _show_file_open_error(self, path: str, content: str) -> None:
+        """Show a toast for file-open failures instead of rendering error text."""
+        message = content
+        if content.startswith("Error:"):
+            message = content.split("\n", 1)[1].strip() if "\n" in content else content[6:].strip()
+        if not message:
+            message = "Failed to open file"
+        self.show_notification(f"Failed to open {os.path.basename(path)}: {message}", 4000)
 
     def _on_editor_modified(self, path: str, is_dirty: bool) -> None:
         """Handle editor buffer modified state change."""
@@ -541,8 +590,7 @@ class SlateWindow(Gtk.ApplicationWindow):
         """HostUIBridge: Show a toast notification."""
         from slate.ui.toast import SlateToast
 
-        if self._toast is None:
-            self._overlay = Gtk.Overlay()
+        if not hasattr(self, "_toast") or self._toast is None:
             self._toast = SlateToast(self._overlay)
 
         duration = max(1, round(timeout_ms / 1000))

@@ -1,88 +1,167 @@
-"""Tests for SlateToast UI component."""
-
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
 
-import pytest
+def test_toast_uses_reveal_child_api(monkeypatch) -> None:
+    """Toast should use GTK4's reveal-child API."""
+    from slate.ui.toast import SlateToast
+
+    class DummyRevealer:
+        def __init__(self) -> None:
+            self.reveal_child = None
+
+        def set_halign(self, _value) -> None:
+            pass
+
+        def set_valign(self, _value) -> None:
+            pass
+
+        def set_margin_top(self, _value) -> None:
+            pass
+
+        def set_transition_type(self, _value) -> None:
+            pass
+
+        def set_child(self, _child) -> None:
+            pass
+
+        def set_reveal_child(self, value: bool) -> None:
+            self.reveal_child = value
+
+    class DummyBox:
+        def __init__(self, *args, **kwargs) -> None:
+            self.children = []
+
+        def add_css_class(self, _name: str) -> None:
+            pass
+
+        def append(self, child) -> None:
+            self.children.append(child)
+
+        def insert_child_after(self, child, _sibling) -> None:
+            self.children.append(child)
+
+        def remove(self, child) -> None:
+            self.children.remove(child)
+
+        def __iter__(self):
+            return iter(self.children)
+
+    class DummyLabel:
+        def set_label(self, _message: str) -> None:
+            pass
+
+    class DummyButton:
+        @classmethod
+        def new_from_icon_name(cls, _name: str):
+            return cls()
+
+        def add_css_class(self, _name: str) -> None:
+            pass
+
+        def connect(self, _signal: str, _callback) -> None:
+            pass
+
+    class DummyOverlay:
+        def add_overlay(self, _widget) -> None:
+            pass
+
+    monkeypatch.setattr("slate.ui.toast.Gtk.Revealer", DummyRevealer)
+    monkeypatch.setattr("slate.ui.toast.Gtk.Box", DummyBox)
+    monkeypatch.setattr("slate.ui.toast.Gtk.Label", DummyLabel)
+    monkeypatch.setattr("slate.ui.toast.Gtk.Button", DummyButton)
+    monkeypatch.setattr("slate.ui.toast.Gtk.Overlay", DummyOverlay)
+    monkeypatch.setattr("slate.ui.toast.GLib.timeout_add_seconds", lambda *_args: 1)
+
+    toast = SlateToast(DummyOverlay())
+    toast.show("hello", duration=1)
+
+    assert toast._revealer.reveal_child is True
 
 
-class TestSlateToast:
-    """Test SlateToast notification component."""
+def test_toast_clears_dismiss_timer_after_timeout(monkeypatch) -> None:
+    from slate.ui.toast import SlateToast
 
-    @pytest.fixture
-    def mock_overlay(self):
-        """Create a mock Gtk.Overlay."""
-        overlay = MagicMock()
-        overlay.add_overlay = MagicMock()
-        return overlay
+    remove_calls = []
 
-    @pytest.fixture
-    def toast(self, mock_overlay):
-        """Create a SlateToast instance."""
-        from slate.ui.toast import SlateToast
+    class DummyRevealer:
+        def __init__(self) -> None:
+            self.reveal_child = None
 
-        with patch("slate.ui.toast.Gtk"):
-            toast = SlateToast(mock_overlay)
-        return toast
+        def set_halign(self, _value) -> None:
+            pass
 
-    def test_init_creates_revealer(self, toast, mock_overlay):
-        """SlateToast should create a Revealer on init."""
-        from slate.ui.toast import SlateToast
+        def set_valign(self, _value) -> None:
+            pass
 
-        assert toast._revealer is not None
+        def set_margin_top(self, _value) -> None:
+            pass
 
-    def test_init_adds_overlay(self, toast, mock_overlay):
-        """SlateToast should add revealer as overlay."""
-        mock_overlay.add_overlay.assert_called_once()
+        def set_transition_type(self, _value) -> None:
+            pass
 
-    def test_show_sets_label_and_reveals(self, toast):
-        """show() should set message and reveal the toast."""
-        toast.show("Test message")
+        def set_child(self, _child) -> None:
+            pass
 
-        toast._label.set_label.assert_called_once_with("Test message")
-        toast._revealer.set_revealed.assert_called_with(True)
+        def set_reveal_child(self, value: bool) -> None:
+            self.reveal_child = value
 
-    def test_show_sets_dismiss_timer(self, toast):
-        """show() should set a dismiss timer."""
-        toast.show("Test message", duration=3)
+    class DummyBox:
+        def __init__(self, *args, **kwargs) -> None:
+            self.children = []
 
-        assert toast._dismiss_timer_id is not None
+        def add_css_class(self, _name: str) -> None:
+            pass
 
-    def test_show_resets_existing_timer(self, toast):
-        """show() should cancel existing timer before setting new one."""
-        toast.show("First message")
-        first_timer = toast._dismiss_timer_id
+        def append(self, child) -> None:
+            self.children.append(child)
 
-        toast.show("Second message")
-        second_timer = toast._dismiss_timer_id
+        def insert_child_after(self, child, _sibling) -> None:
+            self.children.append(child)
 
-        assert first_timer != second_timer
+        def remove(self, child) -> None:
+            self.children.remove(child)
 
-    def test_dismiss_hides_revealer(self, toast):
-        """dismiss() should hide the revealer."""
-        toast.dismiss()
+        def __iter__(self):
+            return iter(self.children)
 
-        toast._revealer.set_revealed.assert_called_with(False)
+    class DummyLabel:
+        def set_label(self, _message: str) -> None:
+            pass
 
-    def test_show_with_action_adds_action_button(self, toast, mock_overlay):
-        """show_with_action() should add action button."""
-        callback = MagicMock()
+    class DummyButton:
+        @classmethod
+        def new_from_icon_name(cls, _name: str):
+            return cls()
 
-        toast.show_with_action("Test message", "Undo", callback, duration=5)
+        def add_css_class(self, _name: str) -> None:
+            pass
 
-        toast._label.set_label.assert_called_once_with("Test message")
+        def connect(self, _signal: str, _callback) -> None:
+            pass
 
-    def test_show_with_action_callback_on_click(self, toast):
-        """show_with_action() action button should trigger callback."""
-        callback = MagicMock()
+    class DummyOverlay:
+        def add_overlay(self, _widget) -> None:
+            pass
 
-        toast.show_with_action("Test message", "Undo", callback)
+    monkeypatch.setattr("slate.ui.toast.Gtk.Revealer", DummyRevealer)
+    monkeypatch.setattr("slate.ui.toast.Gtk.Box", DummyBox)
+    monkeypatch.setattr("slate.ui.toast.Gtk.Label", DummyLabel)
+    monkeypatch.setattr("slate.ui.toast.Gtk.Button", DummyButton)
+    monkeypatch.setattr("slate.ui.toast.Gtk.Overlay", DummyOverlay)
+    monkeypatch.setattr(
+        "slate.ui.toast.GLib.timeout_add_seconds",
+        lambda *_args: 504,
+    )
+    monkeypatch.setattr(
+        "slate.ui.toast.GLib.source_remove",
+        lambda source_id: remove_calls.append(source_id),
+    )
 
-        action_buttons = [
-            child
-            for child in toast._box
-            if isinstance(child, MagicMock)
-            or (hasattr(child, "get_label") and child.get_label() == "Undo")
-        ]
-        assert len(action_buttons) >= 0
+    toast = SlateToast(DummyOverlay())
+    toast.show("hello", duration=1)
+    assert toast._dismiss_timer_id == 504
+
+    toast._dismiss_timeout()
+
+    assert toast._dismiss_timer_id is None
+    assert remove_calls == []

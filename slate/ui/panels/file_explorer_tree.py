@@ -82,7 +82,6 @@ class FileExplorerTree(Gtk.Box):
             value = config_service.get("plugin.file_explorer", "show_hidden_files")
             self._show_hidden_files = value == "true"
 
-        self._breadcrumb_box = self._build_breadcrumb()
         self._header_box = self._build_header()
         self.append(self._header_box)
 
@@ -687,34 +686,10 @@ class FileExplorerTree(Gtk.Box):
         )
         self._tree_model = new_tree_model
         self._selection.set_model(new_tree_model)
-        self._update_breadcrumb(path)
-
-    def _build_breadcrumb(self) -> Gtk.ScrolledWindow:
-        """Create scrollable breadcrumb bar at top of panel."""
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_hexpand(True)
-        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
-        scrolled.set_max_content_height(28)
-        scrolled.set_min_content_height(28)
-
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        box.set_css_classes(["breadcrumb-bar"])
-        box.set_hexpand(False)
-        box.set_margin_start(8)
-        box.set_margin_end(8)
-        box.set_margin_top(4)
-        box.set_margin_bottom(4)
-        scrolled.set_child(box)
-
-        self._breadcrumb_inner_box = box
-        return scrolled
-
     def _build_header(self) -> Gtk.Box:
-        """Create header with breadcrumb bar and menu button."""
+        """Create header with menu button."""
         header_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         header_box.set_hexpand(True)
-
-        header_box.append(self._breadcrumb_box)
 
         menu_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         menu_box.set_hexpand(True)
@@ -765,40 +740,6 @@ class FileExplorerTree(Gtk.Box):
                 self._config_service.set("plugin.file_explorer", "show_hidden_files", value)
             except Exception as e:
                 logger.warning(f"Failed to persist hidden files preference: {e}")
-
-    def _update_breadcrumb(self, path: str) -> None:
-        """Update breadcrumb bar to show current folder path."""
-        inner_box = self._breadcrumb_inner_box
-        child = inner_box.get_first_child()
-        while child is not None:
-            next_child = child.get_next_sibling()
-            inner_box.remove(child)
-            child = next_child
-
-        parts: list[tuple[str, str]] = []
-        current = os.path.abspath(path)
-        while True:
-            parts.append((os.path.basename(current), current))
-            parent = os.path.dirname(current)
-            if parent == current:
-                break
-            current = parent
-        parts.reverse()
-
-        for i, (name, full_path) in enumerate(parts):
-            if i > 0:
-                sep = Gtk.Label(label="›")
-                sep.set_opacity(0.6)
-                inner_box.append(sep)
-
-            btn = Gtk.Button(label=name or "/")
-            btn.set_css_classes(["breadcrumb-segment", "flat"])
-            btn.connect("clicked", lambda _w, p=full_path: self._on_breadcrumb_clicked(p))
-            inner_box.append(btn)
-
-    def _on_breadcrumb_clicked(self, path: str) -> None:
-        """Handle breadcrumb segment click — navigate to parent directory."""
-        self.load_folder(path)
 
     def _set_error(self, message: str) -> None:
         """Show error message in the UI."""

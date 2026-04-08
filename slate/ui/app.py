@@ -227,7 +227,11 @@ def main(test_mode: bool = False) -> int:
         signal.signal(signal.SIGTERM, lambda *_: app.quit())
         app.activate()
 
-    return app.run(None)
+    try:
+        return app.run(None)
+    except KeyboardInterrupt:
+        app.quit()
+        return 130
 
 
 if __name__ == "__main__":

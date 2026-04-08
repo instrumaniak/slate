@@ -105,8 +105,10 @@ class TestFileExplorerTreeCreation:
         has_list_view = any(isinstance(c, Gtk.ScrolledWindow) for c in children)
         assert has_list_view, "FileExplorerTree must contain a ScrolledWindow with ListView"
 
-    def test_widget_has_breadcrumb_bar(self, mock_file_service: Any, event_bus: EventBus) -> None:
-        """FileExplorerTree should contain a breadcrumb bar at the top."""
+    def test_widget_header_has_no_breadcrumb_bar(
+        self, mock_file_service: Any, event_bus: EventBus
+    ) -> None:
+        """FileExplorerTree header should only contain the menu row."""
         from gi.repository import Gtk
 
         from slate.ui.panels.file_explorer_tree import FileExplorerTree
@@ -114,10 +116,9 @@ class TestFileExplorerTreeCreation:
         widget = FileExplorerTree(file_service=mock_file_service, event_bus=event_bus)
         first_child = widget.get_first_child()
         assert isinstance(first_child, Gtk.Box), "First child must be header Box"
-        breadcrumb_box = first_child.get_first_child()
-        assert isinstance(breadcrumb_box, Gtk.ScrolledWindow), (
-            "Header box must contain breadcrumb ScrolledWindow"
-        )
+        header_child = first_child.get_first_child()
+        assert isinstance(header_child, Gtk.Box), "Header should start with menu row"
+        assert not isinstance(header_child.get_first_child(), Gtk.ScrolledWindow)
 
 
 class TestLoadFolder:
@@ -286,53 +287,6 @@ class TestEventWiring:
 
         assert "main.py" in names, "Tree should reload to show src/ contents"
         assert "README.md" not in names, "Old root contents should be gone"
-
-
-class TestBreadcrumb:
-    """Tests for breadcrumb navigation."""
-
-    def test_breadcrumb_shows_current_path(
-        self, mock_file_service: Any, event_bus: EventBus, temp_project: Any
-    ) -> None:
-        """Breadcrumb should display current folder path (AC 7)."""
-        from gi.repository import Gtk
-
-        from slate.ui.panels.file_explorer_tree import FileExplorerTree
-
-        widget = FileExplorerTree(file_service=mock_file_service, event_bus=event_bus)
-        widget.load_folder(str(temp_project))
-
-        breadcrumb = widget._breadcrumb_inner_box
-        segments = []
-        child = breadcrumb.get_first_child()
-        while child is not None:
-            if isinstance(child, Gtk.Button):
-                segments.append(child.get_label())
-            child = child.get_next_sibling()
-
-        assert len(segments) > 0, "Breadcrumb must have at least one segment"
-        assert segments[-1] == "project", f"Last segment should be 'project', got '{segments[-1]}'"
-
-    def test_breadcrumb_segments_are_buttons(
-        self, mock_file_service: Any, event_bus: EventBus, temp_project: Any
-    ) -> None:
-        """Breadcrumb segments should be clickable buttons (AC 7)."""
-        from gi.repository import Gtk
-
-        from slate.ui.panels.file_explorer_tree import FileExplorerTree
-
-        widget = FileExplorerTree(file_service=mock_file_service, event_bus=event_bus)
-        widget.load_folder(str(temp_project))
-
-        breadcrumb = widget._breadcrumb_inner_box
-        buttons = []
-        child = breadcrumb.get_first_child()
-        while child is not None:
-            if isinstance(child, Gtk.Button):
-                buttons.append(child)
-            child = child.get_next_sibling()
-
-        assert len(buttons) > 0, "Breadcrumb must contain clickable buttons"
 
 
 class TestLazyLoading:
