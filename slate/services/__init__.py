@@ -115,4 +115,9 @@ def get_plugin_manager() -> PluginManager:
                         "slate.plugins.core.file_explorer", fromlist=["FileExplorerPlugin"]
                     ).FileExplorerPlugin
                 )
+                _plugin_manager.register_plugin(
+                    __import__(
+                        "slate.plugins.core.source_control", fromlist=["SourceControlPlugin"]
+                    ).SourceControlPlugin
+                )
     return _plugin_manager

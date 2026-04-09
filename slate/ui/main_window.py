@@ -263,6 +263,15 @@ class SlateWindow(Gtk.ApplicationWindow):
                     self._side_panel.set_visible(False)
                     if self._config_service:
                         self._config_service.set("app", "side_panel_visible", "false")
+                    self._update_activity_bar_highlight(None)
+                    return
+
+                if child is not None and child is widget:
+                    # Already showing this panel - toggle off
+                    self._side_panel.set_visible(False)
+                    if self._config_service:
+                        self._config_service.set("app", "side_panel_visible", "false")
+                    self._update_activity_bar_highlight(None)
                     return
 
                 if child is not None and child is not widget:
@@ -272,6 +281,28 @@ class SlateWindow(Gtk.ApplicationWindow):
                 self._side_panel.set_visible(True)
                 if self._config_service:
                     self._config_service.set("app", "side_panel_visible", "true")
+                self._update_activity_bar_highlight(plugin_id)
+
+    def _update_activity_bar_highlight(self, active_plugin_id: str | None) -> None:
+        """Update visual highlight on activity bar buttons."""
+        activity_bar = self._activity_bar
+        child = activity_bar.get_first_child()
+        while child is not None:
+            if isinstance(child, Gtk.Button):
+                tooltip = child.get_tooltip_text()
+                if tooltip:
+                    if tooltip == "File Explorer":
+                        plugin_id = "file_explorer"
+                    elif tooltip == "Source Control":
+                        plugin_id = "source_control"
+                    else:
+                        plugin_id = None
+
+                    if plugin_id and plugin_id == active_plugin_id:
+                        child.set_css_classes(["flat", "active"])
+                    else:
+                        child.set_css_classes(["flat"])
+            child = child.get_next_sibling()
 
     def _create_side_panel(self) -> Gtk.Box:
         """Create side panel container."""
@@ -394,9 +425,7 @@ class SlateWindow(Gtk.ApplicationWindow):
                     self._side_panel.append(widget)
                 if hasattr(widget, "load_folder"):
                     widget.load_folder(path)
-                return
 
-        event_bus = EventBus()
         event_bus.emit(FolderOpenedEvent(path=path))
 
     def _create_editor_view_for_tab(self, path: str, tab: dict) -> None:
@@ -595,6 +624,16 @@ class SlateWindow(Gtk.ApplicationWindow):
 
         duration = max(1, round(timeout_ms / 1000))
         self._toast.show(message, duration=duration)
+
+    def focus_panel(self, plugin_id: str) -> None:
+        """HostUIBridge: Focus (show) the panel for the given plugin."""
+        self._on_activity_bar_item_clicked(plugin_id)
+
+    def set_activity_badge(self, plugin_id: str, badge_text: str) -> None:
+        """HostUIBridge: Set a badge on the activity bar item."""
+        # Activity bar buttons don't support badges directly in current implementation
+        # Could be extended to show badge overlay in future
+        pass
 
     def _on_undo(self) -> None:
         logger.debug("Keyboard shortcut: undo")

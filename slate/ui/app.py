@@ -130,6 +130,10 @@ class SlateApplication(Gtk.Application):
             def get_service(self, service_id: str) -> Any:
                 if service_id == "file":
                     return get_file_service()
+                if service_id == "git":
+                    from slate.services import get_git_service
+
+                    return get_git_service()
                 if service_id == "config":
                     return self._config_service
                 if service_id == "theme":
@@ -150,6 +154,12 @@ class SlateApplication(Gtk.Application):
             @property
             def host_bridge(self):
                 return self._host_bridge
+
+            @property
+            def event_bus(self):
+                from slate.core.event_bus import EventBus
+
+                return EventBus()
 
         context = AppPluginContext(self._config_service, self._theme_service, self._main_window)
         plugin_manager.context = context

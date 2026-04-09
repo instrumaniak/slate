@@ -198,6 +198,23 @@ class HostUIBridge(ABC):
         """
         pass  # Host implementation provides this; plugins can call without error if not implemented
 
+    def focus_panel(self, plugin_id: str) -> None:
+        """Focus (show) the panel for the given plugin.
+
+        Args:
+            plugin_id: ID of the plugin whose panel should be shown.
+        """
+        pass
+
+    def set_activity_badge(self, plugin_id: str, badge_text: str) -> None:
+        """Set a badge count on the activity bar item for a plugin.
+
+        Args:
+            plugin_id: ID of the plugin to badge.
+            badge_text: Text to display as badge (e.g., "3" for 3 changes). Empty string to clear.
+        """
+        pass
+
 
 # ==================== ActivityBarItem ====================
 

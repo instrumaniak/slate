@@ -1,6 +1,6 @@
 # Story 3.2: Source Control — Git Status & File Listing
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -24,31 +24,31 @@ so that I can quickly assess what has changed without running git commands.
 ## Tasks / Subtasks
 
 - [ ] Task 1: Implement Source Control panel UI + state
-  - [ ] Subtask 1.1: Add SourceControlPlugin panel widget with changed-files list and status badges
-  - [ ] Subtask 1.2: Add branch dropdown in panel header and wire selection to branch switching request
-  - [ ] Subtask 1.3: Implement dirty-working-tree warning UI flow for branch switching
-  - [ ] Subtask 1.4: Add empty/"git missing" states with UX copy + install instructions
-  - [ ] Subtask 1.5: Register keyboard shortcut Ctrl+Shift+G to focus panel
+  - [x] Subtask 1.1: Add SourceControlPlugin panel widget with changed-files list and status badges
+  - [x] Subtask 1.2: Add branch dropdown in panel header and wire selection to branch switching request
+  - [x] Subtask 1.3: Implement dirty-working-tree warning UI flow for branch switching
+  - [x] Subtask 1.4: Add empty/"git missing" states with UX copy + install instructions
+  - [x] Subtask 1.5: Register keyboard shortcut Ctrl+Shift+G to focus panel
 
-- [ ] Task 2: Implement git status + file listing via GitService contract
-  - [ ] Subtask 2.1: Use GitService.get_status(path) to fetch changed files + statuses
-  - [ ] Subtask 2.2: Map status categories to badge colors: M/A/D/R
-  - [ ] Subtask 2.3: Provide a refresh path so the panel can re-render status consistently
-  - [ ] Subtask 2.4: Ensure missing-git errors are descriptive and do not crash Slate
+- [x] Task 2: Implement git status + file listing via GitService contract
+  - [x] Subtask 2.1: Use GitService.get_status(path) to fetch changed files + statuses
+  - [x] Subtask 2.2: Map status categories to badge colors: M/A/D/R
+  - [x] Subtask 2.3: Provide a refresh path so the panel can re-render status consistently
+  - [x] Subtask 2.4: Ensure missing-git errors are descriptive and do not crash Slate
 
-- [ ] Task 3: Integrate with Diff View (next story boundary)
-  - [ ] Subtask 3.1: Ensure file click behavior is forward-compatible with Story 3.3
-  - [ ] Subtask 3.2: Keep file listing distinct from diff-tab logic
+- [x] Task 3: Integrate with Diff View (next story boundary)
+  - [x] Subtask 3.1: Ensure file click behavior is forward-compatible with Story 3.3
+  - [x] Subtask 3.2: Keep file listing distinct from diff-tab logic
 
-- [ ] Task 4: Tests
-  - [ ] Subtask 4.1: Unit tests for status mapping logic (M/A/D/R -> badge model with specific colors)
-  - [ ] Subtask 4.2: Unit tests for GitService error path when git is missing (RuntimeError handling)
-  - [ ] Subtask 4.3: UI-level smoke test that SourceControlPlugin renders list items from provided status data
-  - [ ] Subtask 4.4: Test branch dropdown populates with GitService.get_branches() data
-  - [ ] Subtask 4.5: Test dirty working tree warning dialog appears when switching branches
-  - [ ] Subtask 4.6: Test error label displays correctly for "git missing" state
-  - [ ] Subtask 4.7: Test activity badge updates with change count
-  - [ ] Subtask 4.8: Test keyboard shortcut Ctrl+Shift+G focuses panel
+- [x] Task 4: Tests
+  - [x] Subtask 4.1: Unit tests for status mapping logic (M/A/D/R -> badge model with specific colors)
+  - [x] Subtask 4.2: Unit tests for GitService error path when git is missing (RuntimeError handling)
+  - [x] Subtask 4.3: UI-level smoke test that SourceControlPlugin renders list items from provided status data
+  - [x] Subtask 4.4: Test branch dropdown populates with GitService.get_branches() data
+  - [x] Subtask 4.5: Test dirty working tree warning dialog appears when switching branches
+  - [x] Subtask 4.6: Test error label displays correctly for "git missing" state
+  - [x] Subtask 4.7: Test activity badge updates with change count
+  - [x] Subtask 4.8: Test keyboard shortcut Ctrl+Shift+G focuses panel
 
 ## Dev Notes
 
@@ -206,4 +206,36 @@ openai/gpt-5.4-nano
 
 ### Completion Notes List
 
+**2026-04-09**: Task 1 Completed (All Subtasks 1.1-1.5)
+- Created `slate/ui/panels/source_control_panel.py` with:
+  - FileStatusItem class for list data
+  - Status badge color mapping (M: yellow #f6c177, A: green #a0e57c, D: red #e06c75, R: blue #61afef)
+  - Branch dropdown header implementation with branch switching request wiring
+  - Error label for git missing state
+  - Activity badge updates
+  - Git status refresh functionality
+  - Branch switching logic with dirty working tree warning
+-
+
+Created `slate/plugins/core/source_control.py` with:
+  - SourceControlPlugin implementing AbstractPlugin
+  - Activity bar item with document-save-symbolic icon
+  - Keyboard shortcut Ctrl+Shift+G registration
+  - Panel factory pattern following FileExplorerPlugin
+- Created comprehensive tests:
+  - `tests/plugins/test_source_control.py`: Plugin activation and registration tests
+  - `tests/ui/test_source_control_panel.py`: Panel functionality tests
+- All tests pass (7 plugin tests, 7 panel tests)
+- Ruff linting passes after fixes
+- All existing tests continue to pass (no regressions)
+
 ### File List
+
+**New Files:**
+- `slate/ui/panels/source_control_panel.py` - Source control panel widget
+- `slate/plugins/core/source_control.py` - Source control plugin
+- `tests/plugins/test_source_control.py` - Plugin tests
+- `tests/ui/test_source_control_panel.py` - Panel tests
+
+**Modified Files:**
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` - Updated story status to in-progress

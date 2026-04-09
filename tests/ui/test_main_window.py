@@ -163,7 +163,9 @@ def test_open_file_on_startup_loads_parent_folder_for_single_file(monkeypatch) -
     }
 
     file_path = "/tmp/project/src/main.py"
-    monkeypatch.setattr("slate.ui.main_window.os.path.isdir", lambda path: path == "/tmp/project/src")
+    monkeypatch.setattr(
+        "slate.ui.main_window.os.path.isdir", lambda path: path == "/tmp/project/src"
+    )
 
     window.open_file_on_startup(file_path, is_folder=False)
 
@@ -217,6 +219,7 @@ def test_activity_bar_item_click_toggles_file_explorer_visibility() -> None:
     window._side_panel = MagicMock()
     window._paned = MagicMock()
     window._config_service = MagicMock()
+    window._activity_bar = MagicMock()
 
     window._side_panel.get_first_child.return_value = explorer_widget
     window._paned.get_visible.return_value = True
@@ -245,6 +248,7 @@ def test_activity_bar_item_click_shows_hidden_file_explorer() -> None:
     window._side_panel = MagicMock()
     window._paned = MagicMock()
     window._config_service = MagicMock()
+    window._activity_bar = MagicMock()
 
     window._side_panel.get_first_child.return_value = None
     window._side_panel.get_visible.return_value = False
@@ -287,7 +291,9 @@ def test_on_file_opened_shows_toast_for_error_tabs() -> None:
         }
     }
 
-    window._on_file_opened(MagicMock(path="/home/raziur/Projects/rnd/ai-agentic-coding/slate/.coverage"))
+    window._on_file_opened(
+        MagicMock(path="/home/raziur/Projects/rnd/ai-agentic-coding/slate/.coverage")
+    )
 
     window._show_file_open_error.assert_called_once()
     window._create_editor_view_for_tab.assert_called_once()
