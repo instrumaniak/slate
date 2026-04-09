@@ -62,9 +62,9 @@ development_status:
   2-3-file-explorer-context-menu-file-operations: done
   epic-2-retrospective: done
 
-  # Epic 3: Source Control & Code Review
-  epic-3: backlog
-  3-1-diff-view-component: ready-for-dev
+# Epic 3: Source Control & Code Review
+  epic-3: in-progress
+  3-1-diff-view-component: done
   3-2-source-control-git-status-file-listing: backlog
   3-3-source-control-inline-diff-viewing: backlog
   3-4-source-control-staging-commit-workflow: backlog

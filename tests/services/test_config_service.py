@@ -408,6 +408,9 @@ class TestConfigServiceDefaults:
             "plugin.file_explorer": {
                 "show_hidden_files": "false",
             },
+            "diff_view": {
+                "view_mode": "unified",
+            },
         }
 
         assert DEFAULT_CONFIG == expected
