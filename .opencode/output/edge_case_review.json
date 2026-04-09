@@ -1,0 +1,38 @@
+[
+  {
+    "location": "slate/ui/panels/source_control_panel.py:162-167",
+    "trigger_condition": "list_item.get_item() returns model item directly, not wrapped in Gtk.ListItem",
+    "guard_snippet": "item = row if isinstance(row, FileStatusItem) else None",
+    "potential_consequence": "Status items never bound to UI, list shows empty"
+  },
+  {
+    "location": "slate/ui/panels/source_control_panel.py:228-229",
+    "trigger_condition": "parent=self passes Gtk.Box to MessageDialog requiring Gtk.Window",
+    "guard_snippet": "parent=self.get_root() if hasattr(self, 'get_root') else None",
+    "potential_consequence": "Dialog may not display properly or crash"
+  },
+  {
+    "location": "slate/ui/panels/source_control_panel.py:280-297",
+    "trigger_condition": "Git not installed error caught but UI state not cleared",
+    "guard_snippet": "self._branch_dropdown.remove_all(); self._status_store.remove_all()",
+    "potential_consequence": "Stale branch/status data remains visible to user"
+  },
+  {
+    "location": "slate/ui/panels/source_control_panel.py:200-201",
+    "trigger_condition": "Selected branch name not validated against self._branches list",
+    "guard_snippet": "if branch_name not in [b.name for b in self._branches]: return",
+    "potential_consequence": "Invalid branch name passed to git service"
+  },
+  {
+    "location": "slate/ui/panels/source_control_panel.py:172-175",
+    "trigger_condition": "Git status codes like C,U not mapped in color_map",
+    "guard_snippet": "color_map = {**color_map, 'C': '#61afef', 'U': '#e06c75'}",
+    "potential_consequence": "Unknown status shows gray instead of proper color"
+  },
+  {
+    "location": "slate/ui/panels/source_control_panel.py:237",
+    "trigger_condition": "event.path could be None when comparing paths",
+    "guard_snippet": "if event.path and self._current_path and event.path == self._current_path:",
+    "potential_consequence": "Comparison fails or raises error"
+  }
+]
