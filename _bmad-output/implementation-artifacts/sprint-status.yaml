@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-25T06:14:00.000Z
-last_updated: 2026-04-08T08:30:00.000Z
+last_updated: 2026-04-09T00:00:00.000Z
 project: slate
 project_key: NOKEY
 tracking_system: file-system
@@ -65,7 +65,7 @@ development_status:
 # Epic 3: Source Control & Code Review
   epic-3: in-progress
   3-1-diff-view-component: done
-  3-2-source-control-git-status-file-listing: backlog
+  3-2-source-control-git-status-file-listing: ready-for-dev
   3-3-source-control-inline-diff-viewing: backlog
   3-4-source-control-staging-commit-workflow: backlog
   epic-3-retrospective: optional
