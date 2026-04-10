@@ -426,7 +426,7 @@ class SlateWindow(Gtk.ApplicationWindow):
                 if hasattr(widget, "load_folder"):
                     widget.load_folder(path)
 
-        event_bus.emit(FolderOpenedEvent(path=path))
+        self._event_bus.emit(FolderOpenedEvent(path=path))
 
     def _create_editor_view_for_tab(self, path: str, tab: dict) -> None:
         """Create EditorView for a tab and store it."""
