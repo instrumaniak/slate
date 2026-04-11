@@ -76,10 +76,13 @@ class SlateWindow(Gtk.ApplicationWindow):
         self._tab_manager.set_close_dialog_callback(self._show_close_dialog)
 
         from slate.core.event_bus import EventBus
-        from slate.core.events import FileOpenedEvent
+        from slate.core.events import FileOpenedEvent, FolderOpenedEvent, OpenDiffRequestedEvent
 
         self._event_bus = EventBus()
         self._event_bus.subscribe(FileOpenedEvent, self._on_file_opened)
+        self._event_bus.subscribe(OpenDiffRequestedEvent, self._on_open_diff_requested)
+        self._event_bus.subscribe(FolderOpenedEvent, self._on_folder_opened)
+        self._current_folder: str | None = None
 
         self._setup_window_geometry()
         self._apply_theme()
@@ -469,6 +472,52 @@ class SlateWindow(Gtk.ApplicationWindow):
                 self._create_editor_view_for_tab(path, tab)
             self._update_editor_for_tab(path)
 
+    def _on_open_diff_requested(self, event) -> None:
+        """Handle OpenDiffRequestedEvent - display diff in editor area."""
+        from slate.ui.editor.diff_view import DiffView
+
+        diff_path = f"diff:{event.path}"
+        is_staged = event.is_staged
+        diff_label = f"~ {event.path} (diff)"
+
+        from slate.services import get_git_service
+
+        git_service = get_git_service()
+        if not git_service:
+            self.show_notification("Git service not available", 3000)
+            return
+
+        try:
+            diff_content = git_service.get_diff(self._current_folder, event.path, staged=is_staged)
+        except Exception as e:
+            logger.error(f"Failed to get diff: {e}")
+            self.show_notification(f"Failed to get diff: {e}", 3000)
+            return
+
+        diff_view = DiffView(diff_text=diff_content or "", path=event.path)
+        diff_view.set_vexpand(True)
+        diff_view.set_hexpand(True)
+
+        tab_data = {
+            "path": diff_path,
+            "content": diff_content or "",
+            "is_dirty": False,
+            "is_diff": True,
+            "original_path": event.path,
+            "editor_view": diff_view,
+        }
+
+        self._tab_manager._tabs[diff_path] = tab_data
+        self._tab_manager._active_tab = diff_path
+
+        if diff_path not in self._tab_bar.get_tabs():
+            self._tab_bar.add_tab(diff_path, diff_label)
+        else:
+            self._tab_bar.update_tab_label(diff_path, diff_label)
+
+        self._tab_bar.set_active(diff_path)
+        self._editor_scroll.set_child(diff_view)
+
     def _show_file_open_error(self, path: str, content: str) -> None:
         """Show a toast for file-open failures instead of rendering error text."""
         message = content
@@ -485,6 +534,10 @@ class SlateWindow(Gtk.ApplicationWindow):
         else:
             self._tab_manager.mark_clean(path)
         self._tab_bar.set_dirty(path, is_dirty)
+
+    def _on_folder_opened(self, event) -> None:
+        """Handle FolderOpenedEvent - track current folder for diff operations."""
+        self._current_folder = event.path
 
     def _show_close_dialog(self, filename: str, path: str) -> str:
         """Show save/discard dialog for a dirty tab.

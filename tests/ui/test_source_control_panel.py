@@ -19,6 +19,7 @@ class MockGitService:
         self.switch_branch_called = False
         self.switch_branch_path: str | None = None
         self.switch_branch_name: str | None = None
+        self.get_diff_result: str = ""
 
     def get_status(self, repo_path: str) -> list[dict[str, str]]:
         return self.status_data
@@ -30,6 +31,9 @@ class MockGitService:
         self.switch_branch_called = True
         self.switch_branch_path = repo_path
         self.switch_branch_name = branch_name
+
+    def get_diff(self, repo_path: str, path: str | None = None, staged: bool = False) -> str:
+        return self.get_diff_result
 
 
 class MockHostBridge:
@@ -174,3 +178,67 @@ class TestSourceControlPanel:
         assert item2.status == "A"
         # display_path defaults to path if not provided
         assert item2.display_path == "/test/path/file2.py"
+
+
+class TestSourceControlPanelDiffView:
+    """Test SourceControlPanel diff viewing functionality."""
+
+    def test_on_item_activated_with_valid_item(self) -> None:
+        """Clicking a status item should trigger diff viewing."""
+        from unittest.mock import MagicMock
+
+        git_service = MockGitService()
+        git_service.get_diff = MagicMock(return_value="diff content")
+        git_service.status_data = [
+            {"path": "file1.py", "status": "M"},
+        ]
+
+        mock_event_bus = MagicMock()
+
+        panel = SourceControlPanel(git_service=git_service, event_bus=mock_event_bus)
+        panel.set_current_path("/test/path")
+        panel.refresh_status()
+
+        selected_item = panel._status_store.get_item(0)
+        assert selected_item is not None
+
+        panel._on_item_activated(panel._status_list)
+
+        git_service.get_diff.assert_called_once_with("/test/path", "file1.py", staged=False)
+        mock_event_bus.emit.assert_called_once()
+        call_args = mock_event_bus.emit.call_args[0][0]
+        assert call_args.path == "file1.py"
+        assert call_args.is_staged is False
+
+    def test_on_item_activated_staged_file(self) -> None:
+        """Clicking a staged file should request staged diff."""
+        from unittest.mock import MagicMock
+
+        git_service = MockGitService()
+        git_service.get_diff = MagicMock(return_value="staged diff content")
+        git_service.status_data = [
+            {"path": "newfile.py", "status": "A"},
+        ]
+
+        mock_event_bus = MagicMock()
+
+        panel = SourceControlPanel(git_service=git_service, event_bus=mock_event_bus)
+        panel.set_current_path("/test/path")
+        panel.refresh_status()
+
+        panel._on_item_activated(panel._status_list)
+
+        git_service.get_diff.assert_called_once_with("/test/path", "newfile.py", staged=True)
+        call_args = mock_event_bus.emit.call_args[0][0]
+        assert call_args.is_staged is True
+
+    def test_on_item_activated_no_git_service(self) -> None:
+        """Should not crash if git_service is not available."""
+        panel = SourceControlPanel(git_service=None)
+        panel._on_item_activated(panel._status_list)
+
+    def test_on_item_activated_no_current_path(self) -> None:
+        """Should not crash if current_path is not set."""
+        git_service = MockGitService()
+        panel = SourceControlPanel(git_service=git_service)
+        panel._on_item_activated(panel._status_list)

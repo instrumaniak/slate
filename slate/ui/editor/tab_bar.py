@@ -178,6 +178,19 @@ class TabBar(Gtk.Box):
         else:
             indicator.set_markup("")
 
+    def update_tab_label(self, path: str, label: str) -> None:
+        """Update the label for an existing tab.
+
+        Args:
+            path: Path of the tab.
+            label: New label text.
+        """
+        if path not in self._tab_labels:
+            return
+
+        label_widget = self._tab_labels[path]
+        label_widget.set_text(label)
+
     def reorder_tabs(self, new_order: list) -> None:
         """Reorder tabs based on drag and drop.
 

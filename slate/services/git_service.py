@@ -157,12 +157,13 @@ class GitService:
 
             return results
 
-    def get_diff(self, repo_path: str, path: str | None = None) -> str:
+    def get_diff(self, repo_path: str, path: str | None = None, staged: bool = False) -> str:
         """Get diff text.
 
         Args:
             repo_path: Path to the git repository.
             path: Optional specific file path to diff.
+            staged: If True, return staged diff (git diff --cached).
 
         Returns:
             Diff text as string.
@@ -174,9 +175,15 @@ class GitService:
         with self._lock:
             repo = self._get_repo(repo_path)
 
+            if staged:
+                diff_cmd = ["--cached"]
+            else:
+                diff_cmd = []
+
             if path is not None:
-                return repo.git.diff("--", path)  # type: ignore[no-any-return]
-            return repo.git.diff()  # type: ignore[no-any-return]
+                diff_cmd.extend(("--", path))
+
+            return repo.git.diff(*diff_cmd)  # type: ignore[no-any-return]
 
     def stage_file(self, repo_path: str, path: str) -> None:
         """Stage a file (git add).

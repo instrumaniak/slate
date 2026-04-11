@@ -66,7 +66,7 @@ development_status:
   epic-3: in-progress
   3-1-diff-view-component: done
   3-2-source-control-git-status-file-listing: done
-  3-3-source-control-inline-diff-viewing: ready-for-dev
+  3-3-source-control-inline-diff-viewing: review
   3-4-source-control-staging-commit-workflow: backlog
   epic-3-retrospective: optional
 

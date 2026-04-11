@@ -10,7 +10,11 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gio, GObject, Gtk, Pango  # noqa: E402
 
-from slate.core.events import FolderOpenedEvent, GitStatusChangedEvent  # noqa: E402
+from slate.core.events import (  # noqa: E402
+    FolderOpenedEvent,
+    GitStatusChangedEvent,
+    OpenDiffRequestedEvent,
+)
 from slate.core.models import BranchInfo  # noqa: E402
 
 if TYPE_CHECKING:
@@ -84,6 +88,7 @@ class SourceControlPanel(Gtk.Box):
         self._selection_model = Gtk.SingleSelection.new(self._status_store)
         self._status_list.set_model(self._selection_model)
         self._status_list.set_factory(self._create_factory())
+        self._status_list.connect("activate", self._on_item_activated)
 
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_child(self._status_list)
@@ -271,6 +276,28 @@ class SourceControlPanel(Gtk.Box):
     def _on_refresh_clicked(self, button: Gtk.Button) -> None:
         """Handle refresh button click."""
         self.refresh_status()
+
+    def _on_item_activated(self, list_view: Gtk.ListView) -> None:
+        """Handle file item activation - open diff view for the file."""
+        selection = list_view.get_model()
+        if selection is None:
+            return
+
+        selected_item = selection.get_selected_item()
+        if not isinstance(selected_item, FileStatusItem):
+            return
+
+        if self._current_path and self._git_service:
+            try:
+                repo_path = self._current_path
+                file_path = selected_item.path
+                staged = selected_item.status == "A"
+                diff_content = self._git_service.get_diff(repo_path, file_path, staged=staged)
+                if diff_content:
+                    self._event_bus.emit(OpenDiffRequestedEvent(path=file_path, is_staged=staged))
+            except Exception as e:
+                logger.error(f"Failed to get diff for {selected_item.path}: {e}")
+                self._show_error(f"Failed to open diff: {e}")
 
     def _on_git_status_changed(self, event: GitStatusChangedEvent) -> None:
         """Handle git status changed event."""
