@@ -23,7 +23,7 @@ so that I can quickly assess what has changed without running git commands.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Implement Source Control panel UI + state
+- [x] Task 1: Implement Source Control panel UI + state
   - [x] Subtask 1.1: Add SourceControlPlugin panel widget with changed-files list and status badges
   - [x] Subtask 1.2: Add branch dropdown in panel header and wire selection to branch switching request
   - [x] Subtask 1.3: Implement dirty-working-tree warning UI flow for branch switching
@@ -206,6 +206,11 @@ openai/gpt-5.4-nano
 
 ### Completion Notes List
 
+**2026-04-11**: Bug Fix - Source Control panel not receiving folder path
+- Fixed `main_window.py:_load_folder_in_explorer()` to call `set_current_path()` on SourceControlPanel
+- Root cause: SourceControlPanel was subscribing to FolderOpenedEvent but MainWindow only called `load_folder()` on FileExplorerTree directly
+- Now both file explorer and source control panels are synced when a folder is opened
+
 **2026-04-09**: Task 1 Completed (All Subtasks 1.1-1.5)
 - Created `slate/ui/panels/source_control_panel.py` with:
   - FileStatusItem class for list data
@@ -238,4 +243,5 @@ Created `slate/plugins/core/source_control.py` with:
 - `tests/ui/test_source_control_panel.py` - Panel tests
 
 **Modified Files:**
+- `slate/ui/main_window.py` - Fixed _load_folder_in_explorer to sync SourceControlPanel
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` - Updated story status to in-progress

@@ -292,14 +292,27 @@ class SourceControlPanel(Gtk.Box):
     def _show_dirty_warning_dialog(self) -> bool:
         """Show warning dialog for dirty working tree. Returns True if user proceeds."""
         parent = self.get_root() if hasattr(self, "get_root") else None
-        dialog = Gtk.MessageDialog(
-            parent=parent,
-            flags=Gtk.DialogFlags.MODAL,
-            message_type=Gtk.MessageType.WARNING,
-            buttons=Gtk.ButtonsType.OK_CANCEL,
-            text="Working tree has uncommitted changes",
+
+        dialog = Gtk.Dialog()
+        if parent:
+            dialog.set_transient_for(parent)
+        dialog.set_modal(True)
+        dialog.set_title("Switch Branch")
+        dialog.set_default_size(400, -1)
+
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Switch", Gtk.ResponseType.OK)
+
+        content_area = dialog.get_content_area()
+        label = Gtk.Label(
+            label="Working tree has uncommitted changes.\n\nSwitch branch anyway? Changes will be preserved."
         )
-        dialog.format_secondary_text("Switch branch anyway? Changes will be preserved.")
+        label.set_margin_top(8)
+        label.set_margin_bottom(16)
+        label.set_margin_start(16)
+        label.set_margin_end(16)
+        content_area.append(label)
+
         response = dialog.run()
         dialog.destroy()
         return response == Gtk.ResponseType.OK

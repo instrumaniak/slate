@@ -251,37 +251,33 @@ class SlateWindow(Gtk.ApplicationWindow):
     def _on_activity_bar_item_clicked(self, plugin_id: str) -> None:
         """Handle activity bar item click - show the corresponding panel."""
         plugin = self._plugin_manager.get_plugin(plugin_id)
-        if plugin and hasattr(plugin, "get_panel_widget"):
-            widget = plugin.get_panel_widget()
-            if widget:
-                child = self._side_panel.get_first_child()
-                if (
-                    plugin_id == "file_explorer"
-                    and child is widget
-                    and self._side_panel.get_visible()
-                ):
-                    self._side_panel.set_visible(False)
-                    if self._config_service:
-                        self._config_service.set("app", "side_panel_visible", "false")
-                    self._update_activity_bar_highlight(None)
-                    return
+        if not plugin or not hasattr(plugin, "get_panel_widget"):
+            return
 
-                if child is not None and child is widget:
-                    # Already showing this panel - toggle off
-                    self._side_panel.set_visible(False)
-                    if self._config_service:
-                        self._config_service.set("app", "side_panel_visible", "false")
-                    self._update_activity_bar_highlight(None)
-                    return
+        widget = plugin.get_panel_widget()
+        if not widget:
+            return
 
-                if child is not None and child is not widget:
-                    self._side_panel.remove(child)
-                if child is not widget:
-                    self._side_panel.append(widget)
-                self._side_panel.set_visible(True)
-                if self._config_service:
-                    self._config_service.set("app", "side_panel_visible", "true")
-                self._update_activity_bar_highlight(plugin_id)
+        child = self._side_panel.get_first_child()
+        is_visible = self._side_panel.get_visible()
+
+        # Case 1: Same panel button clicked twice - toggle off
+        if child is widget and is_visible:
+            self._side_panel.set_visible(False)
+            if self._config_service:
+                self._config_service.set("app", "side_panel_visible", "false")
+            self._update_activity_bar_highlight(None)
+            return
+
+        # Case 2: Different panel or panel hidden - show requested panel
+        if child is not None and child is not widget:
+            self._side_panel.remove(child)
+        if child is not widget:
+            self._side_panel.append(widget)
+        self._side_panel.set_visible(True)
+        if self._config_service:
+            self._config_service.set("app", "side_panel_visible", "true")
+        self._update_activity_bar_highlight(plugin_id)
 
     def _update_activity_bar_highlight(self, active_plugin_id: str | None) -> None:
         """Update visual highlight on activity bar buttons."""
@@ -411,7 +407,6 @@ class SlateWindow(Gtk.ApplicationWindow):
 
     def _load_folder_in_explorer(self, path: str) -> None:
         """Load a folder into the file explorer panel."""
-        from slate.core.event_bus import EventBus
         from slate.core.events import FolderOpenedEvent
 
         plugin = self._plugin_manager.get_plugin("file_explorer")
@@ -425,6 +420,12 @@ class SlateWindow(Gtk.ApplicationWindow):
                     self._side_panel.append(widget)
                 if hasattr(widget, "load_folder"):
                     widget.load_folder(path)
+
+        sc_plugin = self._plugin_manager.get_plugin("source_control")
+        if sc_plugin and hasattr(sc_plugin, "get_panel_widget"):
+            sc_widget = sc_plugin.get_panel_widget()
+            if sc_widget and hasattr(sc_widget, "set_current_path"):
+                sc_widget.set_current_path(path)
 
         self._event_bus.emit(FolderOpenedEvent(path=path))
 
