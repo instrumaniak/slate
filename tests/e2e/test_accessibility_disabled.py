@@ -12,6 +12,9 @@ import time
 import pytest
 
 
+@pytest.mark.timeout(30)
+@pytest.mark.slow
+@pytest.mark.e2e
 def test_app_starts_without_atspi(require_display):
     """App should attempt to start in headless environment."""
     env = os.environ.copy()
@@ -41,6 +44,9 @@ def test_app_starts_without_atspi(require_display):
         proc.wait()
 
 
+@pytest.mark.timeout(30)
+@pytest.mark.slow
+@pytest.mark.e2e
 def test_app_exits_cleanly_with_sigterm(require_display):
     """App should exit cleanly when terminated with SIGTERM."""
     env = os.environ.copy()

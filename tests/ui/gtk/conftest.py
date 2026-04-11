@@ -1,5 +1,30 @@
+import gc
+import os
+
 import pytest
 from gi.repository import GLib
+
+
+@pytest.fixture(autouse=True)
+def cleanup_after_test():
+    """Force garbage collection after each test to prevent memory leaks."""
+    yield
+    gc.collect()
+    gc.collect()
+    gc.collect()
+
+    for child in os.listdir("/proc"):
+        if child.isdigit():
+            try:
+                with open(f"/proc/{child}/cmdline", "rb") as f:
+                    cmdline = f.read()
+                    if b"slate" in cmdline or b"SlateApplication" in cmdline:
+                        try:
+                            os.kill(int(child), 9)
+                        except (ProcessLookupError, PermissionError):
+                            pass
+            except (FileNotFoundError, PermissionError):
+                pass
 
 
 @pytest.fixture

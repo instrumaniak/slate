@@ -62,6 +62,8 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short --cov=slate --cov-report=term-missing --cov-fail-under=90"
+timeout = 60
+timeout_hard_timeout = 120
 
 [tool.coverage.run]
 source = ["slate"]

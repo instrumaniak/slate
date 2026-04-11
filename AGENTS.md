@@ -2,6 +2,37 @@
 
 Context7 MCP enabled for library docs (see global `~/.config/opencode/AGENTS.md`)
 
+## ⚠️ SYSTEM SAFETY MANDATES
+
+The code and tests MUST NEVER crash, freeze, or consume excessive host resources. All work must implement these safeguards:
+
+### Memory Safety
+- **ALL tests must have timeouts**: Use `@pytest.mark.timeout(N)` decorator (N ≤ 60s for fast tests, ≤ 120s for slow)
+- **Never run full pytest without safeguards** - can freeze system if tests have memory leaks or infinite loops
+- **Always use fixtures that cleanup after themselves** - temp directories, orphan processes
+- **Test with resource limits**: Use `resource.setrlimit()` to cap memory consumption in test fixtures
+
+### Process Safety
+- **Kill orphan processes after each test** - especially GTK apps, subprocess spawns
+- **Use fixtures with autouse teardown** to kill leaked processes (e.g., slate, gtk, gdbus)
+- **Never leave subprocesses hanging** - always use `finally` or `yield` to terminate
+- **E2E/subprocess tests must use `@pytest.mark.slow @pytest.mark.e2e`** - allow exclusion via `-m "not e2e"`
+
+### Test Configuration (Mandatory in pyproject.toml)
+```toml
+[tool.pytest.ini_options]
+timeout = 60
+timeout_hard_timeout = 120
+```
+
+### Test Safety Rules
+1. **Never** run `pytest tests/` without understanding which tests spawn GTK/subprocess
+2. **Always** use `--ignore=tests/e2e/` unless you have D-Bus + xvfb + AT-SPI
+3. **Safe default**: `pytest tests/core/ tests/services/ -v` (no GTK, no subprocess)
+4. **Use markers**: `@pytest.mark.slow`, `@pytest.mark.e2e`, `@pytest.mark.gtk` for filtering
+
+---
+
 ## Agent Workflow
 
 ### Task Management
@@ -40,8 +71,12 @@ ruff format .
 # Type check
 mypy slate/
 
-# Test (requires GUI display or xvfb)
-pytest tests/ --cov=slate --cov-report=term-missing --cov-fail-under=85
+# Safe test (core + services only - no GTK/subprocess)
+pytest tests/core/ tests/services/ -v
+
+# Full tests (requires xvfb + dbus for E2E)
+pytest tests/ -v -m "not e2e"
+xvfb-run -a pytest tests/ -v
 
 # Run app
 slate                    # open empty editor
@@ -62,6 +97,13 @@ slate/
 
 ## Critical Anti-Patterns
 
+### Resource Safety (NEVER DO)
+- ❌ Never leave orphan processes - always cleanup in fixtures with `finally` or `yield`
+- ❌ Never run full pytest without `--ignore=tests/e2e/` unless you have proper display setup
+- ❌ Never test GTK without xvfb or display server - will freeze system
+- ❌ Never assume tests don't spawn subprocesses - always verify and cleanup
+
+### Code Safety
 - ❌ Never `from gi.repository import Gtk` at module level in `core/` or `services/`
 - ❌ Never call `gitpython` or `open()` from UI layer — use services
 - ❌ Never emit `FileOpenedEvent` directly — only `TabManager` does this
@@ -71,6 +113,34 @@ slate/
 
 ## Testing
 
+### Test Fixtures (Mandatory)
+All test directories must have a `conftest.py` with these safeguards:
+
+```python
+import gc
+import resource
+
+import pytest
+
+# 1. Memory limit via resource.setrlimit(resource.RLIMIT_AS, (2GB, hard_limit))
+
+# 2. GC after each test
+def pytest_runtest_teardown(item, nextitem):
+    gc.collect()
+
+# 3. Kill orphan processes
+@pytest.fixture(autouse=True)
+def cleanup_orphan_processes():
+    yield
+    # kill leaked slate/gtk processes
+```
+
+### Test Markers (Required)
+- `@pytest.mark.timeout(N)` - ALL tests must timeout
+- `@pytest.mark.slow` - tests that spawn subprocess or GTK
+- `@pytest.mark.e2e` - end-to-end tests requiring display/desktop
+
+### Coverage Requirements
 - `core/` and `services/`: 90%+ coverage required
 - `ui/`: smoke/integration tests only (no widget coverage chase)
 - Use `temp_dir`, `temp_git_repo` fixtures over excessive mocking

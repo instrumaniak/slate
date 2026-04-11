@@ -12,6 +12,8 @@ from dogtail.predicate import GenericPredicate
 
 
 @pytest.mark.timeout(30)
+@pytest.mark.slow
+@pytest.mark.e2e
 def test_side_panel_accessible_name(slate_accessible):
     """Side panel should be accessible with test mode name."""
     from tests.e2e.driver.queries import find_side_panel
@@ -26,6 +28,8 @@ def test_side_panel_accessible_name(slate_accessible):
 
 
 @pytest.mark.timeout(30)
+@pytest.mark.slow
+@pytest.mark.e2e
 def test_tab_bar_accessible_name(slate_accessible):
     """Tab bar should be accessible with test mode name."""
     from tests.e2e.driver.queries import find_tab_bar
@@ -40,6 +44,8 @@ def test_tab_bar_accessible_name(slate_accessible):
 
 
 @pytest.mark.timeout(30)
+@pytest.mark.slow
+@pytest.mark.e2e
 def test_toggle_panel_action_exists(slate_accessible):
     """Toggle panel shortcut should change side panel visibility."""
     import time
@@ -64,6 +70,8 @@ def test_toggle_panel_action_exists(slate_accessible):
 
 
 @pytest.mark.timeout(30)
+@pytest.mark.slow
+@pytest.mark.e2e
 def test_app_responds_to_close_request(slate_app_subprocess, slate_accessible):
     """App should respond to close request and exit."""
     from tests.e2e.driver.actions import close_window
