@@ -278,3 +278,10 @@ class ConfigService:
                 result[section_name] = dict(self._config.items(section_name))
 
             return result
+
+    def get_editor_settings(self) -> dict[str, str]:
+        """Return a snapshot of the settings used by editor views."""
+        with self._lock:
+            if not self._config.has_section("editor"):
+                return dict(DEFAULT_CONFIG["editor"])
+            return dict(self._config.items("editor"))

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Mapping
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
@@ -147,12 +148,21 @@ class CairoDiffArea(Gtk.DrawingArea if GTK_AVAILABLE else object):
     LINE_HEIGHT = 20
     GUTTER_WIDTH = 60
 
-    def __init__(self, parsed_lines: list[ParsedDiffLine] | None = None) -> None:
+    def __init__(
+        self,
+        parsed_lines: list[ParsedDiffLine] | None = None,
+        editor_settings: dict[str, str] | None = None,
+    ) -> None:
         if not GTK_AVAILABLE:
             return
         super().__init__()
         self._parsed_lines = parsed_lines or []
         self._pango_layout: Pango.Layout | None = None
+        self._font_description = Pango.FontDescription.from_string(
+            (editor_settings or {}).get("font", "Monospace 13")
+        )
+        metrics = self.get_pango_context().get_metrics(self._font_description)
+        self._line_height = max(20, metrics.get_height() // Pango.SCALE + 4)
         self.set_focusable(True)
         self.set_can_focus(True)
         self.set_draw_func(self._on_draw)
@@ -168,7 +178,7 @@ class CairoDiffArea(Gtk.DrawingArea if GTK_AVAILABLE else object):
         if not GTK_AVAILABLE:
             return
         total_lines = len(self._parsed_lines)
-        total_height = max(total_lines * self.LINE_HEIGHT, 100)
+        total_height = max(total_lines * self._line_height, 100)
         self.set_content_height(total_height)
         self.set_content_width(800)
 
@@ -176,9 +186,7 @@ class CairoDiffArea(Gtk.DrawingArea if GTK_AVAILABLE else object):
         if self._pango_layout is None:
             pctx = self.get_pango_context()
             self._pango_layout = Pango.Layout(pctx)
-            self._pango_layout.set_font_description(
-                Pango.FontDescription.from_string("Monospace 11")
-            )
+            self._pango_layout.set_font_description(self._font_description)
         return self._pango_layout
 
     def scroll_to_line(self, line_number: int) -> None:
@@ -190,7 +198,7 @@ class CairoDiffArea(Gtk.DrawingArea if GTK_AVAILABLE else object):
             parent = parent.get_parent()
         if isinstance(parent, Gtk.ScrolledWindow):
             adjustment = parent.get_vadjustment()
-            value = max(0.0, min(line_number * self.LINE_HEIGHT, adjustment.get_upper()))
+            value = max(0.0, min(line_number * self._line_height, adjustment.get_upper()))
             adjustment.set_value(value)
 
     def _on_draw(self, area: Gtk.DrawingArea, cr: cairo.Context, width: int, height: int) -> None:
@@ -200,14 +208,14 @@ class CairoDiffArea(Gtk.DrawingArea if GTK_AVAILABLE else object):
         alloc = self.get_allocation()
         scroll_y = -alloc.y
 
-        start_line = max(0, int(scroll_y / self.LINE_HEIGHT))
-        end_line = min(len(self._parsed_lines), start_line + int(height / self.LINE_HEIGHT) + 2)
+        start_line = max(0, int(scroll_y / self._line_height))
+        end_line = min(len(self._parsed_lines), start_line + int(height / self._line_height) + 2)
 
         cr.set_source_rgb(0.1, 0.1, 0.1)
         cr.paint()
 
         layout = self._ensure_layout()
-        y = -(scroll_y % self.LINE_HEIGHT) + (start_line * self.LINE_HEIGHT - scroll_y)
+        y = -(scroll_y % self._line_height) + (start_line * self._line_height - scroll_y)
 
         for i in range(start_line, end_line):
             parsed = self._parsed_lines[i]
@@ -218,7 +226,7 @@ class CairoDiffArea(Gtk.DrawingArea if GTK_AVAILABLE else object):
             else:
                 cr.set_source_rgba(0.12, 0.12, 0.12, 1.0)
 
-            cr.rectangle(0, y, width, self.LINE_HEIGHT)
+            cr.rectangle(0, y, width, self._line_height)
             cr.fill()
 
             cr.set_source_rgb(0.9, 0.9, 0.9)
@@ -226,7 +234,7 @@ class CairoDiffArea(Gtk.DrawingArea if GTK_AVAILABLE else object):
             layout.set_text(parsed.content)
             PangoCairo.show_layout(cr, layout)
 
-            y += self.LINE_HEIGHT
+            y += self._line_height
 
 
 class DiffView(Gtk.Box if GTK_AVAILABLE else object):
@@ -274,6 +282,12 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
         )
         self._on_view_mode_changed = on_view_mode_changed
         self._config_service = config_service
+        configured_settings = (
+            config_service.get_editor_settings() if config_service is not None else {}
+        )
+        self._editor_settings = (
+            dict(configured_settings) if isinstance(configured_settings, Mapping) else {}
+        )
         self._is_empty = not self._diff_text or not self._diff_text.strip()
 
         self._parsed_lines: list[ParsedDiffLine] = []
@@ -371,7 +385,7 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
             self._content_scrolled.set_child(source_view)
         else:
             self._parsed_lines = DiffParser.parse(self._diff_text)
-            cairo_area = CairoDiffArea(self._parsed_lines)
+            cairo_area = CairoDiffArea(self._parsed_lines, self._editor_settings)
             self._cairo_area = cairo_area
             with suppress(AttributeError, TypeError):
                 Gtk.Accessible.update_property(
@@ -438,11 +452,9 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
         view.set_monospace(True)
         view.set_editable(False)
         view.set_wrap_mode(Gtk.WrapMode.NONE)
+        from slate.ui.editor.editor_view import apply_editor_settings
 
-        if hasattr(view, "set_tab_width"):
-            view.set_tab_width(4)
-        if hasattr(view, "set_indent_width"):
-            view.set_indent_width(4)
+        apply_editor_settings(view, self._editor_settings)
 
         return view
 

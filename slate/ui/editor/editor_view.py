@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 logger = logging.getLogger(__name__)
 
@@ -9,12 +9,71 @@ try:
     import gi
 
     gi.require_version("GtkSource", "5")
-    from gi.repository import Gtk, GtkSource
+    from gi.repository import Gtk, GtkSource, Pango
 
     GTK_AVAILABLE = True
 except (ImportError, ValueError):
     GTK_AVAILABLE = False
-    GtkSource = Gtk = None
+    GtkSource = Gtk = Pango = None
+
+
+DEFAULT_EDITOR_SETTINGS = {
+    "font": "Monospace 13",
+    "tab_width": "4",
+    "insert_spaces": "true",
+    "show_line_numbers": "true",
+    "highlight_current_line": "true",
+    "word_wrap": "false",
+    "auto_indent": "true",
+}
+
+
+def _setting_bool(settings: Mapping[str, str], key: str, default: bool) -> bool:
+    value = settings.get(key)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _setting_int(settings: Mapping[str, str], key: str, default: int, minimum: int) -> int:
+    try:
+        return max(minimum, int(settings.get(key, str(default))))
+    except (TypeError, ValueError):
+        return default
+
+
+def apply_editor_settings(view, settings: Mapping[str, str] | None = None) -> None:
+    """Apply persisted editor settings to a GtkSource.View instance."""
+    if not GTK_AVAILABLE:
+        return
+
+    resolved = dict(DEFAULT_EDITOR_SETTINGS)
+    if settings:
+        resolved.update(settings)
+
+    view.set_show_line_numbers(_setting_bool(resolved, "show_line_numbers", True))
+    view.set_highlight_current_line(_setting_bool(resolved, "highlight_current_line", True))
+    view.set_auto_indent(_setting_bool(resolved, "auto_indent", True))
+    view.set_indent_width(_setting_int(resolved, "tab_width", 4, 1))
+    view.set_tab_width(_setting_int(resolved, "tab_width", 4, 1))
+    view.set_insert_spaces_instead_of_tabs(_setting_bool(resolved, "insert_spaces", True))
+    view.set_wrap_mode(
+        Gtk.WrapMode.WORD if _setting_bool(resolved, "word_wrap", False) else Gtk.WrapMode.NONE
+    )
+
+    font_description = Pango.FontDescription.from_string(
+        resolved.get("font", DEFAULT_EDITOR_SETTINGS["font"])
+    )
+    family = font_description.get_family() or "Monospace"
+    size = font_description.get_size() / Pango.SCALE
+    if size <= 0:
+        size = 13
+    escaped_family = family.replace("\\", "\\\\").replace('"', '\\"')
+    css = f'textview {{ font-family: "{escaped_family}"; font-size: {size:g}pt; }}'
+    provider = Gtk.CssProvider()
+    provider.load_from_data(css.encode("utf-8"))
+    view.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+    view._slate_font_css_provider = provider
 
 
 class EditorView(GtkSource.View if GTK_AVAILABLE else object):
@@ -28,6 +87,7 @@ class EditorView(GtkSource.View if GTK_AVAILABLE else object):
         content: str,
         editor_scheme: str = "Adwaita",
         on_modified_changed: Callable[[bool], None] | None = None,
+        editor_settings: Mapping[str, str] | None = None,
     ) -> None:
         """Initialize EditorView."""
         if not EditorView._gtk_available:
@@ -50,29 +110,19 @@ class EditorView(GtkSource.View if GTK_AVAILABLE else object):
         buffer.connect("modified-changed", self._on_buffer_modified)
         factory.apply_scheme(buffer, editor_scheme)
 
-        self._setup_basic_properties()
+        self._setup_basic_properties(editor_settings)
 
     def _on_buffer_modified(self, buffer) -> None:
         """Handle buffer modified state change."""
         if self._on_modified_changed:
             self._on_modified_changed(buffer.get_modified())
 
-    def _setup_basic_properties(self) -> None:
+    def _setup_basic_properties(self, settings: Mapping[str, str] | None = None) -> None:
         """Configure basic editor properties."""
         if not self._gtk_available:
             return
 
-        self.set_show_line_numbers(True)
-        self.set_highlight_current_line(True)
-        self.set_auto_indent(True)
-        if hasattr(self, "set_indent_width"):
-            self.set_indent_width(4)
-        if hasattr(self, "set_tab_width"):
-            self.set_tab_width(4)
-        if hasattr(self, "set_insert_spaces"):
-            self.set_insert_spaces(True)
-        if hasattr(self, "set_wrap_mode"):
-            self.set_wrap_mode(Gtk.WrapMode.NONE)
+        apply_editor_settings(self, settings)
 
     def get_content(self) -> str:
         """Get current editor content."""

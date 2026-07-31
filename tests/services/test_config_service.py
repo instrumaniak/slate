@@ -150,6 +150,19 @@ class TestConfigServiceGet:
 
             assert service.get("nonexistent_section", "key") is None
 
+    @pytest.mark.timeout(10)
+    def test_get_editor_settings_returns_editor_section_snapshot(self):
+        """Editor settings should be returned without exposing ConfigParser state."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config_path = Path(tmp_dir) / "config.ini"
+            service = ConfigService(config_path=str(config_path))
+
+            settings = service.get_editor_settings()
+            settings["font"] = "Monospace 20"
+
+            assert service.get("editor", "font") == "Monospace 13"
+            assert settings["tab_width"] == "4"
+
 
 class TestConfigServiceSet:
     """Test ConfigService.set() method."""

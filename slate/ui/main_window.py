@@ -476,6 +476,7 @@ class SlateWindow(Gtk.ApplicationWindow):
             path=path,
             content=tab.get("content", ""),
             editor_scheme=self._editor_scheme,
+            editor_settings=self._config_service.get_editor_settings(),
             on_modified_changed=lambda dirty, p=path: self._on_editor_modified(p, dirty),
         )
 
@@ -520,7 +521,11 @@ class SlateWindow(Gtk.ApplicationWindow):
             self.show_notification(f"Failed to get diff: {e}", 3000)
             return
 
-        diff_view = DiffView(diff_text=diff_content or "", path=event.path)
+        diff_view = DiffView(
+            diff_text=diff_content or "",
+            path=event.path,
+            config_service=self._config_service,
+        )
         diff_view.set_vexpand(True)
         diff_view.set_hexpand(True)
 
