@@ -89,6 +89,7 @@ class SourceControlPanel(Gtk.Box):
         self._selection_model = Gtk.SingleSelection.new(self._status_store)
         self._status_list.set_model(self._selection_model)
         self._status_list.set_factory(self._create_factory())
+        self._status_list.set_single_click_activate(True)
         self._status_list.connect("activate", self._on_item_activated)
 
         scrolled = Gtk.ScrolledWindow()
@@ -285,13 +286,13 @@ class SourceControlPanel(Gtk.Box):
         """Handle refresh button click."""
         self.refresh_status()
 
-    def _on_item_activated(self, list_view: Gtk.ListView) -> None:
+    def _on_item_activated(self, list_view: Gtk.ListView, position: int | None = None) -> None:
         """Handle file item activation - open diff view for the file."""
-        selection = list_view.get_model()
-        if selection is None:
+        model = list_view.get_model()
+        if model is None:
             return
 
-        selected_item = selection.get_selected_item()
+        selected_item = model.get_selected_item() if position is None else model.get_item(position)
         if not isinstance(selected_item, FileStatusItem):
             return
 

@@ -64,6 +64,12 @@ python_functions = ["test_*"]
 addopts = "-v --tb=short --cov=slate --cov-report=term-missing --cov-fail-under=90"
 timeout = 60
 timeout_hard_timeout = 120
+markers = [
+    "slow: marks tests as slow",
+    "gtk: marks tests requiring GTK display",
+    "e2e: marks end-to-end tests",
+    "benchmark: opt-in performance benchmark",
+]
 
 [tool.coverage.run]
 source = ["slate"]

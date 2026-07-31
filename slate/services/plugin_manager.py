@@ -133,6 +133,46 @@ class PluginManager:
                 logger.error(f"Failed to activate plugin {plugin_class.__name__}: {result.error}")
         return results
 
+    def activate_on_demand(self, plugin_id: str) -> ActivationResult:
+        """Activate a specific registered plugin by its plugin_id.
+
+        Deferred activation: plugins are registered at startup but only
+        instantiated and activated when their feature is first requested.
+        This reduces startup time by deferring heavy imports.
+
+        Args:
+            plugin_id: The unique identifier of the plugin to activate.
+
+        Returns:
+            ActivationResult indicating success or failure.
+
+        Unknown IDs are returned as failed results for optional-feature callers.
+        """
+        # Already active — no-op
+        if plugin_id in self._active_plugins:
+            return ActivationResult(plugin_id=plugin_id, success=True, error=None)
+
+        # Look up registered class by plugin_id
+        plugin_class = self._plugin_id_cache.get(plugin_id)
+        if plugin_class is None:
+            return ActivationResult(
+                plugin_id=plugin_id,
+                success=False,
+                error=(
+                    f"Unknown plugin_id '{plugin_id}'. "
+                    f"Registered plugins: {list(self._plugin_id_cache.keys())}"
+                ),
+            )
+
+        if self._context is None:
+            return ActivationResult(
+                plugin_id=plugin_id,
+                success=False,
+                error="PluginContext not set on PluginManager",
+            )
+
+        return self.load_plugin(plugin_class)
+
     def deactivate_all(self) -> None:
         """Call deactivate() on all active plugins during shutdown.
 

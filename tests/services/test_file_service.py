@@ -267,9 +267,11 @@ class TestFileServiceMonitor:
 
         service = FileService()
 
-        with patch.dict("sys.modules", {"gi": None, "gi.repository": None}):
-            with pytest.raises(ImportError):
-                service.monitor_directory(str(tmp_path))
+        with (
+            patch.dict("sys.modules", {"gi": None, "gi.repository": None}),
+            pytest.raises(ImportError),
+        ):
+            service.monitor_directory(str(tmp_path))
 
     def test_monitor_replaces_existing(self, tmp_path: Path) -> None:
         """Starting a new monitor should cancel the previous one."""
@@ -287,7 +289,7 @@ class TestFileServiceMonitor:
         dir2 = tmp_path / "dir2"
         dir2.mkdir()
 
-        monitor1 = service.monitor_directory(str(dir1))
+        service.monitor_directory(str(dir1))
         monitor2 = service.monitor_directory(str(dir2))
 
         assert monitor2 is not None
@@ -305,7 +307,7 @@ class TestFileServiceMonitor:
             pytest.skip("GIO not available")
 
         service = FileService()
-        monitor = service.monitor_directory(str(tmp_path))
+        service.monitor_directory(str(tmp_path))
         assert service._monitor is not None
 
         service.stop_monitor()
@@ -351,9 +353,12 @@ class TestFileServiceZeroGtk:
                 for alias in node.names:
                     if alias.name == "gi" or alias.name.startswith("gi."):
                         module_level_gtk_imports.append(f"import {alias.name}")
-            elif isinstance(node, ast.ImportFrom):
-                if node.module and (node.module == "gi" or node.module.startswith("gi.")):
-                    module_level_gtk_imports.append(f"from {node.module}")
+            elif (
+                isinstance(node, ast.ImportFrom)
+                and node.module
+                and (node.module == "gi" or node.module.startswith("gi."))
+            ):
+                module_level_gtk_imports.append(f"from {node.module}")
 
         assert len(module_level_gtk_imports) == 0, (
             f"Found GTK imports at module level: {module_level_gtk_imports}"
@@ -500,3 +505,40 @@ class TestFileServiceOperations:
         service = FileService()
 
         assert service.count_immediate_children(str(tmp_path)) == 2
+
+    def test_read_chunks_and_get_line_count(self, tmp_path: Path) -> None:
+        """read_chunks and get_line_count should process file via mmap."""
+        test_file = tmp_path / "mmap_test.txt"
+        content = "line 1\nline 2\nline 3\nline 4\nline 5\n"
+        test_file.write_text(content)
+
+        service = FileService()
+        line_count = service.get_line_count(str(test_file))
+        assert line_count == 5
+
+        chunks = list(service.read_chunks(str(test_file), chunk_size=2))
+        assert len(chunks) == 3
+        assert chunks[0] == ["line 1\n", "line 2\n"]
+        assert chunks[1] == ["line 3\n", "line 4\n"]
+        assert chunks[2] == ["line 5\n"]
+
+    def test_mmap_helpers_handle_empty_unterminated_and_invalid_chunks(
+        self, tmp_path: Path
+    ) -> None:
+        """mmap helpers should be correct at file and argument boundaries."""
+        service = FileService()
+        empty = tmp_path / "empty.txt"
+        empty.write_bytes(b"")
+        assert service.get_line_count(str(empty)) == 0
+        assert list(service.read_chunks(str(empty))) == [[]]
+
+        unterminated = tmp_path / "unterminated.txt"
+        unterminated.write_bytes(b"one\ntwo")
+        assert service.get_line_count(str(unterminated)) == 2
+        assert list(service.read_chunks(str(unterminated), chunk_size=1)) == [
+            ["one\n"],
+            ["two"],
+        ]
+
+        with pytest.raises(ValueError):
+            list(service.read_chunks(str(unterminated), chunk_size=0))

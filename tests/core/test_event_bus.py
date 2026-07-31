@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
+
+import pytest
 
 from slate.core.event_bus import EventBus
 from slate.core.events import (
@@ -164,3 +167,46 @@ class TestEventBus:
             ThemeChangedEvent(color_mode="dark", resolved_is_dark=True, editor_scheme="default")
         )
         assert len(results) == 2
+
+    @pytest.mark.timeout(10)
+    def test_emit_batched_schedules_one_idle_callback_and_flushes(self):
+        """Batched producers share one scheduled callback and preserve events."""
+        bus = EventBus()
+        calls = []
+
+        def handler(event: FileSavedEvent) -> None:
+            calls.append(event.path)
+
+        bus.subscribe(FileSavedEvent, handler)
+        try:
+            with patch("gi.repository.GLib.idle_add") as idle_add:
+                bus.emit_batched(FileSavedEvent(path="a"))
+                bus.emit_batched(FileSavedEvent(path="b"))
+                assert idle_add.call_count == 1
+                assert idle_add.call_args.args[0]() is False
+            assert calls == ["a", "b"]
+        finally:
+            bus.unsubscribe(FileSavedEvent, handler)
+
+    @pytest.mark.timeout(10)
+    def test_emit_batched_queue_swap_keeps_events_emitted_by_handler(self):
+        """Events emitted while flushing are retained for the next idle cycle."""
+        bus = EventBus()
+        calls = []
+
+        def handler(event: FileSavedEvent) -> None:
+            calls.append(event.path)
+            if event.path == "first":
+                bus.emit_batched(FileSavedEvent(path="second"))
+
+        bus.subscribe(FileSavedEvent, handler)
+        try:
+            with patch("gi.repository.GLib.idle_add") as idle_add:
+                bus.emit_batched(FileSavedEvent(path="first"))
+                first_flush = idle_add.call_args.args[0]
+                first_flush()
+                assert idle_add.call_count == 2
+                idle_add.call_args.args[0]()
+            assert calls == ["first", "second"]
+        finally:
+            bus.unsubscribe(FileSavedEvent, handler)

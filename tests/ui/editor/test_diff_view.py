@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import git
 import pytest
@@ -108,6 +108,8 @@ class TestDiffViewHighlighting:
 class TestDiffViewModes:
     """Test view mode functionality."""
 
+    pytestmark = pytest.mark.timeout(10)
+
     def test_unified_view_is_default(self) -> None:
         """Unified view should be the default display mode."""
         from slate.ui.editor.diff_view import DiffView
@@ -148,6 +150,24 @@ class TestDiffViewModes:
 
         mock_config.set.assert_called_once_with("diff_view", "view_mode", "split")
 
+    def test_clear_children_uses_gtk4_child_traversal(self) -> None:
+        """GTK4 mode rebuilds remove children without the removed foreach API."""
+        from slate.ui.editor.diff_view import DiffView
+
+        first = Mock()
+        second = Mock()
+        first.get_next_sibling.return_value = second
+        second.get_next_sibling.return_value = None
+
+        view = DiffView.__new__(DiffView)
+        view._gtk_available = True
+        view.get_first_child = Mock(return_value=first)
+        view.remove = Mock()
+
+        view._clear_children()
+
+        assert view.remove.call_args_list == [call(first), call(second)]
+
 
 class TestDiffViewEmpty:
     """Test empty diff handling."""
@@ -179,7 +199,7 @@ class TestDiffViewPerformance:
         diff_text = git_service.get_diff(str(git_repo))
 
         start = time.perf_counter()
-        view = DiffView(diff_text=diff_text, path="test.py")
+        DiffView(diff_text=diff_text, path="test.py")
         elapsed = (time.perf_counter() - start) * 1000
 
         assert elapsed < 100, f"Diff render took {elapsed:.2f}ms, expected <100ms"

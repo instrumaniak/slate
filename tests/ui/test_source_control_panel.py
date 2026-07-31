@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
+
 from slate.ui.panels.source_control_panel import FileStatusItem, SourceControlPanel
 
 
@@ -200,6 +202,8 @@ class TestSourceControlPanel:
 class TestSourceControlPanelDiffView:
     """Test SourceControlPanel diff viewing functionality."""
 
+    pytestmark = pytest.mark.timeout(10)
+
     def test_on_item_activated_with_valid_item(self) -> None:
         """Clicking a status item should trigger diff viewing."""
 
@@ -218,7 +222,7 @@ class TestSourceControlPanelDiffView:
         selected_item = panel._status_store.get_item(0)
         assert selected_item is not None
 
-        panel._on_item_activated(panel._status_list)
+        panel._on_item_activated(panel._status_list, 0)
 
         git_service.get_diff.assert_called_once_with("/test/path", "file1.py", staged=False)
         mock_event_bus.emit.assert_called_once()
@@ -241,7 +245,7 @@ class TestSourceControlPanelDiffView:
         panel.set_current_path("/test/path")
         panel.refresh_status()
 
-        panel._on_item_activated(panel._status_list)
+        panel._on_item_activated(panel._status_list, 0)
 
         git_service.get_diff.assert_called_once_with("/test/path", "newfile.py", staged=True)
         call_args = mock_event_bus.emit.call_args[0][0]

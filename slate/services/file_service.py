@@ -9,6 +9,7 @@ import logging
 import os
 import shutil
 import threading
+from collections.abc import Iterator
 from typing import Any
 
 from slate.core.event_bus import EventBus
@@ -331,3 +332,73 @@ class FileService:
                     logger.warning(f"Failed to cancel file monitor: {e}")
                 self._monitor = None
                 self._monitor_path = None
+
+    def read_chunks(self, path: str, chunk_size: int = 8192) -> Iterator[list[str]]:
+        """Yield file contents in chunks via mmap without full RAM load.
+
+        Args:
+            path: Absolute file path.
+            chunk_size: Number of lines per chunk.
+
+        Yields:
+            List of decoded lines per chunk.
+        """
+        import mmap
+
+        if not isinstance(chunk_size, int) or isinstance(chunk_size, bool) or chunk_size <= 0:
+            raise ValueError("chunk_size must be a positive integer")
+
+        resolved = _validate_path(path)
+        if not os.path.exists(resolved):
+            raise FileNotFoundError(f"File not found: {path}")
+
+        if os.path.getsize(resolved) == 0:
+            yield []
+            return
+
+        with (
+            self._lock,
+            open(resolved, "rb") as f,
+            mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm,
+        ):
+            chunk: list[str] = []
+            for line in iter(mm.readline, b""):
+                chunk.append(line.decode("utf-8", errors="replace"))
+                if len(chunk) >= chunk_size:
+                    yield chunk
+                    chunk = []
+            if chunk:
+                yield chunk
+
+    def get_line_count(self, path: str) -> int:
+        """Count lines in file via mmap block reads.
+
+        Args:
+            path: Absolute file path.
+
+        Returns:
+            Line count.
+        """
+        import mmap
+
+        resolved = _validate_path(path)
+        if not os.path.exists(resolved):
+            raise FileNotFoundError(f"File not found: {path}")
+
+        if os.path.getsize(resolved) == 0:
+            return 0
+
+        count = 0
+        with (
+            self._lock,
+            open(resolved, "rb") as f,
+            mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm,
+        ):
+            while True:
+                block = mm.read(1024 * 1024)
+                if not block:
+                    break
+                count += block.count(b"\n")
+            if mm.size() and mm[-1:] != b"\n":
+                count += 1
+        return count

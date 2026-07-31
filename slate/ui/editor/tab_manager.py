@@ -3,7 +3,8 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 from slate.core.event_bus import EventBus
 from slate.core.events import (
@@ -17,6 +18,19 @@ if TYPE_CHECKING:
     from slate.services.file_service import FileService
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TabState:
+    """Serializable state for a tab — cheap to keep in memory."""
+
+    path: str
+    content: str = ""
+    is_dirty: bool = False
+    is_error: bool = False
+    scroll_position: float = 0.0
+    cursor_position: tuple[int, int] = field(default_factory=lambda: (0, 0))
+    widget: Any = None
 
 
 class TabManager:
@@ -36,6 +50,7 @@ class TabManager:
         """
         self._file_service = file_service
         self._tabs: dict[str, dict] = {}
+        self._tab_states: dict[str, TabState] = {}
         self._active_tab: str | None = None
         self._tab_order: list[str] = []
         self._close_dialog_callback: Callable | None = None
@@ -75,6 +90,7 @@ class TabManager:
 
         if path in self._tabs:
             self._active_tab = path
+            self._event_bus.emit(TabActivatedEvent(path=path))
             return self._tabs[path]
 
         try:
@@ -90,12 +106,41 @@ class TabManager:
             "is_error": content.startswith("Error:"),
         }
         self._tabs[path] = tab
+        self._tab_states[path] = TabState(
+            path=path,
+            content=content,
+            is_dirty=False,
+            is_error=content.startswith("Error:"),
+        )
         self._active_tab = path
         self._tab_order.append(path)
 
         self._event_bus.emit(FileOpenedEvent(path=path, content=content))
 
         return tab
+
+    def register_tab(self, tab: dict, widget: Any = None) -> None:
+        """Register a tab whose content was produced outside the file service."""
+        path = tab.get("path")
+        if not isinstance(path, str) or not path:
+            raise ValueError("A tab path is required")
+        if path in self._tabs:
+            self._tabs[path].update(tab)
+            if widget is not None:
+                self.attach_widget(path, widget)
+            return
+
+        self._tabs[path] = tab
+        self._tab_states[path] = TabState(
+            path=path,
+            content=tab.get("content", ""),
+            is_dirty=tab.get("is_dirty", False),
+            is_error=tab.get("is_error", False),
+            widget=widget,
+        )
+        if widget is not None:
+            self._tabs[path]["editor_view"] = widget
+        self._tab_order.append(path)
 
     def close_tab(self, path: str) -> bool:
         """Close a tab.
@@ -125,6 +170,7 @@ class TabManager:
                     return False
 
         del self._tabs[path]
+        self._tab_states.pop(path, None)
         if path in self._tab_order:
             self._tab_order.remove(path)
 
@@ -159,6 +205,25 @@ class TabManager:
         if path in self._tabs:
             self._active_tab = path
 
+    def attach_widget(self, path: str, widget: Any) -> None:
+        """Associate the currently materialized editor with a tab."""
+        if path in self._tabs and path in self._tab_states:
+            self._tabs[path]["editor_view"] = widget
+            self._tab_states[path].widget = widget
+
+    def detach_widget(self, path: str) -> Any:
+        """Remove and return a tab's editor widget, retaining only its state."""
+        if path not in self._tabs:
+            return None
+        widget = self._tabs[path].pop("editor_view", None)
+        if path in self._tab_states:
+            self._tab_states[path].widget = None
+        return widget
+
+    def get_tab_state(self, path: str) -> TabState | None:
+        """Return the lightweight state for a tab."""
+        return self._tab_states.get(path)
+
     def mark_dirty(self, path: str) -> None:
         """Mark a tab as having unsaved changes.
 
@@ -167,6 +232,7 @@ class TabManager:
         """
         if path in self._tabs:
             self._tabs[path]["is_dirty"] = True
+            self._tab_states[path].is_dirty = True
 
     def mark_clean(self, path: str) -> None:
         """Mark a tab as having no unsaved changes.
@@ -176,11 +242,13 @@ class TabManager:
         """
         if path in self._tabs:
             self._tabs[path]["is_dirty"] = False
+            self._tab_states[path].is_dirty = False
 
     def set_tab_content(self, path: str, content: str) -> None:
         """Update stored content for an open tab."""
         if path in self._tabs:
             self._tabs[path]["content"] = content
+            self._tab_states[path].content = content
 
     def save_tab(self, path: str, content: str) -> None:
         """Persist tab content and mark the tab clean."""
@@ -189,6 +257,7 @@ class TabManager:
 
         self._file_service.write_file(path, content)
         self._tabs[path]["content"] = content
+        self._tab_states[path].content = content
         self.mark_clean(path)
 
     def get_tab_list(self) -> list[str]:

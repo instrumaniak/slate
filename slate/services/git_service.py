@@ -5,7 +5,6 @@ Zero GTK imports at module level - pure Python with gitpython.
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import threading
 from typing import TYPE_CHECKING
@@ -13,6 +12,7 @@ from typing import TYPE_CHECKING
 from slate.core.event_bus import EventBus
 from slate.core.events import GitStatusChangedEvent
 from slate.core.models import BranchInfo
+from slate.services.git_cli_service import GitCliService
 
 if TYPE_CHECKING:
     from git import Repo
@@ -78,6 +78,7 @@ class GitService:
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
+        self._cli_service = GitCliService()
 
     def _get_repo(self, repo_path: str) -> Repo:
         """Get a git Repo object for the given path.
@@ -125,37 +126,8 @@ class GitService:
             git.InvalidGitRepositoryError: If path is not a git repo.
         """
         with self._lock:
-            repo = self._get_repo(repo_path)
-            results: list[dict[str, str]] = []
-            seen_paths: set[str] = set()  # O(1) deduplication
-
-            # Modified files (staged and unstaged)
-            diff_index = repo.index.diff(None)
-            for diff_item in diff_index:
-                path = diff_item.b_path or diff_item.a_path
-                if path and path not in seen_paths:
-                    seen_paths.add(path)
-                    change_type = diff_item.change_type or ""
-                    status = _STATUS_MAP.get(change_type, change_type)
-                    results.append({"path": path, "status": status})
-
-            # Staged changes (that weren't already captured above)
-            diff_staged = repo.index.diff("HEAD")
-            for diff_item in diff_staged:
-                path = diff_item.b_path or diff_item.a_path
-                if path and path not in seen_paths:
-                    seen_paths.add(path)
-                    change_type = diff_item.change_type or ""
-                    status = _STATUS_MAP.get(change_type, change_type)
-                    results.append({"path": path, "status": status})
-
-            # Untracked files
-            for path in repo.untracked_files:
-                if path not in seen_paths:
-                    seen_paths.add(path)
-                    results.append({"path": path, "status": _UNTRACKED_STATUS})
-
-            return results
+            self._get_repo(repo_path)
+            return self._cli_service.status(repo_path)
 
     def get_diff(self, repo_path: str, path: str | None = None, staged: bool = False) -> str:
         """Get diff text.
@@ -173,17 +145,8 @@ class GitService:
             git.InvalidGitRepositoryError: If path is not a git repo.
         """
         with self._lock:
-            repo = self._get_repo(repo_path)
-
-            if staged:
-                diff_cmd = ["--cached"]
-            else:
-                diff_cmd = []
-
-            if path is not None:
-                diff_cmd.extend(("--", path))
-
-            return repo.git.diff(*diff_cmd)  # type: ignore[no-any-return]
+            self._get_repo(repo_path)
+            return self._cli_service.diff_text(repo_path, path=path, staged=staged)
 
     def stage_file(self, repo_path: str, path: str) -> None:
         """Stage a file (git add).
@@ -261,28 +224,8 @@ class GitService:
             git.InvalidGitRepositoryError: If path is not a git repo.
         """
         with self._lock:
-            repo = self._get_repo(repo_path)
-            branches: list[BranchInfo] = []
-
-            current_name = None
-            with contextlib.suppress(TypeError):
-                current_name = repo.active_branch.name
-
-            for branch in repo.heads:
-                last_commit = ""
-                with contextlib.suppress(Exception):
-                    last_commit = branch.commit.hexsha[:8]
-
-                branches.append(
-                    BranchInfo(
-                        name=branch.name,
-                        is_current=branch.name == current_name,
-                        is_remote=False,
-                        last_commit=last_commit,
-                    )
-                )
-
-            return branches
+            self._get_repo(repo_path)
+            return self._cli_service.get_branches(repo_path)
 
     def switch_branch(self, repo_path: str, branch_name: str) -> None:
         """Switch to a branch.

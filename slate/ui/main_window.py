@@ -163,7 +163,10 @@ class SlateWindow(Gtk.ApplicationWindow):
         """Update color scheme for all open editor views."""
         for tab in self._tab_manager.get_tabs().values():
             if "editor_view" in tab and tab["editor_view"]:
-                buffer = tab["editor_view"].get_buffer()
+                editor_view = tab["editor_view"]
+                if not hasattr(editor_view, "get_buffer"):
+                    continue
+                buffer = editor_view.get_buffer()
                 if buffer:
                     from slate.ui.editor.editor_factory import EditorViewFactory
 
@@ -350,33 +353,56 @@ class SlateWindow(Gtk.ApplicationWindow):
 
     def _on_tab_selected(self, tab_bar, path: str) -> None:
         """Handle tab selection."""
+        previous = self._tab_manager.get_active_tab()
+        if previous and previous != path:
+            self._snapshot_editor(previous)
+            old_widget = self._tab_manager.detach_widget(previous)
+            if old_widget is not None and self._editor_scroll.get_child() is old_widget:
+                self._editor_scroll.set_child(None)
         self._tab_manager.set_active_tab(path)
         self._update_editor_for_tab(path)
 
     def _on_tab_close_requested(self, tab_bar, path: str) -> None:
         """Handle tab close request."""
         tab = self._tab_manager.get_tabs().get(path)
-        if tab is not None:
-            editor_view = tab.get("editor_view")
-            if editor_view is not None and hasattr(editor_view, "get_content"):
-                self._tab_manager.set_tab_content(path, editor_view.get_content())
+        editor_view = tab.get("editor_view") if tab else None
+        if tab is not None and editor_view is not None and hasattr(editor_view, "get_content"):
+            self._tab_manager.set_tab_content(path, editor_view.get_content())
 
         closed = self._tab_manager.close_tab(path)
         if closed:
-            tab = self._tab_manager.get_tabs().get(path, {})
-            editor_view = tab.pop("editor_view", None)
             if editor_view and self._editor_scroll.get_child() is editor_view:
                 self._editor_scroll.set_child(None)
             self._tab_bar.remove_tab(path)
 
             if not self._tab_manager.get_tabs():
                 self._editor_scroll.set_child(None)
+            else:
+                active = self._tab_manager.get_active_tab()
+                if active:
+                    self._tab_bar.set_active(active)
+                    self._update_editor_for_tab(active)
 
     def _update_editor_for_tab(self, path: str) -> None:
         """Update editor container to show the selected tab's editor."""
         tab = self._tab_manager.get_tabs().get(path)
-        if tab and "editor_view" in tab:
+        if tab is None:
+            return
+        if "editor_view" not in tab:
+            self._create_editor_view_for_tab(path, tab)
+        if tab.get("editor_view") is not None:
             self._editor_scroll.set_child(tab["editor_view"])
+
+    def _snapshot_editor(self, path: str) -> None:
+        """Save live editor content before it is made inactive."""
+        tab = self._tab_manager.get_tabs().get(path)
+        if tab is None or tab.get("editor_view") is None:
+            return
+        editor = tab["editor_view"]
+        if hasattr(editor, "get_content"):
+            self._tab_manager.set_tab_content(path, editor.get_content())
+        if hasattr(editor, "is_dirty") and editor.is_dirty():
+            self._tab_manager.mark_dirty(path)
 
     def open_file_on_startup(self, path: str, is_folder: bool = False) -> None:
         """Open a file on application startup."""
@@ -442,7 +468,7 @@ class SlateWindow(Gtk.ApplicationWindow):
             message = tab.get("content", "Failed to open file")
             details = message.split("\n", 1)[1].strip() if "\n" in message else message
             editor_view = ErrorPlaceholder("Could not open file", details)
-            tab["editor_view"] = editor_view
+            self._tab_manager.attach_widget(path, editor_view)
             self._editor_scroll.set_child(editor_view)
             return
 
@@ -453,7 +479,7 @@ class SlateWindow(Gtk.ApplicationWindow):
             on_modified_changed=lambda dirty, p=path: self._on_editor_modified(p, dirty),
         )
 
-        tab["editor_view"] = editor_view
+        self._tab_manager.attach_widget(path, editor_view)
 
         if editor_view:
             self._editor_scroll.set_child(editor_view)
@@ -468,12 +494,12 @@ class SlateWindow(Gtk.ApplicationWindow):
             if path not in self._tab_bar.get_tabs():
                 self._tab_bar.add_tab(path, path.split("/")[-1])
             self._tab_bar.set_active(path)
-            if "editor_view" not in tab:
-                self._create_editor_view_for_tab(path, tab)
             self._update_editor_for_tab(path)
 
     def _on_open_diff_requested(self, event) -> None:
         """Handle OpenDiffRequestedEvent - display diff in editor area."""
+        from slate.services.diff_parser import DiffParser
+        from slate.ui.editor.diff_navigator import DiffNavigator
         from slate.ui.editor.diff_view import DiffView
 
         diff_path = f"diff:{event.path}"
@@ -498,17 +524,29 @@ class SlateWindow(Gtk.ApplicationWindow):
         diff_view.set_vexpand(True)
         diff_view.set_hexpand(True)
 
+        diffs = DiffParser.parse_diff_text(diff_content or "")
+        navigator = DiffNavigator(
+            diffs=diffs,
+            on_hunk_selected=lambda file_index, hunk_index: diff_view.scroll_to_hunk(hunk_index),
+        )
+        diff_container = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
+        diff_container.set_position(220)
+        diff_container.set_start_child(navigator)
+        diff_container.set_end_child(diff_view)
+        diff_container.set_vexpand(True)
+        diff_container.set_hexpand(True)
+
         tab_data = {
             "path": diff_path,
             "content": diff_content or "",
             "is_dirty": False,
             "is_diff": True,
             "original_path": event.path,
-            "editor_view": diff_view,
+            "editor_view": diff_container,
         }
 
-        self._tab_manager._tabs[diff_path] = tab_data
-        self._tab_manager._active_tab = diff_path
+        self._tab_manager.register_tab(tab_data, widget=diff_container)
+        self._tab_manager.set_active_tab(diff_path)
 
         if diff_path not in self._tab_bar.get_tabs():
             self._tab_bar.add_tab(diff_path, diff_label)
@@ -516,7 +554,7 @@ class SlateWindow(Gtk.ApplicationWindow):
             self._tab_bar.update_tab_label(diff_path, diff_label)
 
         self._tab_bar.set_active(diff_path)
-        self._editor_scroll.set_child(diff_view)
+        self._editor_scroll.set_child(diff_container)
 
     def _show_file_open_error(self, path: str, content: str) -> None:
         """Show a toast for file-open failures instead of rendering error text."""

@@ -690,3 +690,48 @@ def test_context_change_warning_when_active(mock_context, caplog):
         manager.context = new_context
 
     assert any("context changed" in record.message.lower() for record in caplog.records)
+
+
+@pytest.mark.timeout(10)
+def test_activate_on_demand_does_not_activate_at_registration(mock_context):
+    """Registration only indexes a plugin; activation remains deferred."""
+    activations = []
+
+    class DeferredPlugin(AbstractPlugin):
+        @property
+        def plugin_id(self) -> str:
+            return "deferred"
+
+        def activate(self, context: PluginContext) -> None:
+            activations.append(context)
+
+    manager = PluginManager(mock_context)
+    manager.register_plugin(DeferredPlugin)
+    assert activations == []
+    result = manager.activate_on_demand("deferred")
+    assert result.success is True
+    assert len(activations) == 1
+    assert manager.activate_on_demand("deferred").success is True
+    assert len(activations) == 1
+
+
+@pytest.mark.timeout(10)
+def test_activate_on_demand_reports_unknown_and_missing_context():
+    """Optional plugin callers receive actionable failure results."""
+    manager = PluginManager()
+    unknown = manager.activate_on_demand("missing")
+    assert unknown.success is False
+    assert "Unknown plugin_id" in (unknown.error or "")
+
+    class DeferredPlugin(AbstractPlugin):
+        @property
+        def plugin_id(self) -> str:
+            return "deferred"
+
+        def activate(self, context: PluginContext) -> None:
+            raise AssertionError("should not activate without context")
+
+    manager.register_plugin(DeferredPlugin)
+    missing_context = manager.activate_on_demand("deferred")
+    assert missing_context.success is False
+    assert "PluginContext" in (missing_context.error or "")

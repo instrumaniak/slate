@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+from contextlib import suppress
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -16,17 +17,20 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 try:
+    import cairo
     import gi
 
     gi.require_version("GtkSource", "5")
     gi.require_version("Gtk", "4.0")
-    from gi.repository import Gtk, GtkSource
+    from gi.repository import Gdk, Gtk, GtkSource, Pango, PangoCairo
 
-    GTK_AVAILABLE = True
+    GTK_AVAILABLE = Gdk.Display.get_default() is not None
 except (ImportError, ValueError):
     GTK_AVAILABLE = False
     Gtk = None
     GtkSource = None
+    Pango = None
+    PangoCairo = None
 
 ADDITION_BG_COLOR = "#2ea04320"
 DELETION_BG_COLOR = "#f8514920"
@@ -118,10 +122,7 @@ class DiffParser:
             elif line.startswith(" ") or (
                 not line.startswith("\\") and not line.startswith("diff")
             ):
-                if line.startswith(" "):
-                    content = line[1:]
-                else:
-                    content = line
+                content = line[1:] if line.startswith(" ") else line
 
                 if content:
                     parsed_lines.append(
@@ -138,6 +139,94 @@ class DiffParser:
                         new_line += 1
 
         return parsed_lines
+
+
+class CairoDiffArea(Gtk.DrawingArea if GTK_AVAILABLE else object):
+    """Virtualized Cairo drawing area for high-performance diff rendering."""
+
+    LINE_HEIGHT = 20
+    GUTTER_WIDTH = 60
+
+    def __init__(self, parsed_lines: list[ParsedDiffLine] | None = None) -> None:
+        if not GTK_AVAILABLE:
+            return
+        super().__init__()
+        self._parsed_lines = parsed_lines or []
+        self._pango_layout: Pango.Layout | None = None
+        self.set_focusable(True)
+        self.set_can_focus(True)
+        self.set_draw_func(self._on_draw)
+        self._update_virtual_size()
+
+    def set_parsed_lines(self, parsed_lines: list[ParsedDiffLine]) -> None:
+        self._parsed_lines = parsed_lines
+        self._update_virtual_size()
+        if GTK_AVAILABLE:
+            self.queue_draw()
+
+    def _update_virtual_size(self) -> None:
+        if not GTK_AVAILABLE:
+            return
+        total_lines = len(self._parsed_lines)
+        total_height = max(total_lines * self.LINE_HEIGHT, 100)
+        self.set_content_height(total_height)
+        self.set_content_width(800)
+
+    def _ensure_layout(self) -> Pango.Layout:
+        if self._pango_layout is None:
+            pctx = self.get_pango_context()
+            self._pango_layout = Pango.Layout(pctx)
+            self._pango_layout.set_font_description(
+                Pango.FontDescription.from_string("Monospace 11")
+            )
+        return self._pango_layout
+
+    def scroll_to_line(self, line_number: int) -> None:
+        """Scroll the containing GTK scroller to a zero-based rendered line."""
+        if not GTK_AVAILABLE:
+            return
+        parent = self.get_parent()
+        while parent is not None and not isinstance(parent, Gtk.ScrolledWindow):
+            parent = parent.get_parent()
+        if isinstance(parent, Gtk.ScrolledWindow):
+            adjustment = parent.get_vadjustment()
+            value = max(0.0, min(line_number * self.LINE_HEIGHT, adjustment.get_upper()))
+            adjustment.set_value(value)
+
+    def _on_draw(self, area: Gtk.DrawingArea, cr: cairo.Context, width: int, height: int) -> None:
+        if not self._parsed_lines:
+            return
+
+        alloc = self.get_allocation()
+        scroll_y = -alloc.y
+
+        start_line = max(0, int(scroll_y / self.LINE_HEIGHT))
+        end_line = min(len(self._parsed_lines), start_line + int(height / self.LINE_HEIGHT) + 2)
+
+        cr.set_source_rgb(0.1, 0.1, 0.1)
+        cr.paint()
+
+        layout = self._ensure_layout()
+        y = -(scroll_y % self.LINE_HEIGHT) + (start_line * self.LINE_HEIGHT - scroll_y)
+
+        for i in range(start_line, end_line):
+            parsed = self._parsed_lines[i]
+            if parsed.line_type == DiffLineType.ADDITION:
+                cr.set_source_rgba(0.0, 0.35, 0.0, 0.3)
+            elif parsed.line_type == DiffLineType.DELETION:
+                cr.set_source_rgba(0.35, 0.0, 0.0, 0.3)
+            else:
+                cr.set_source_rgba(0.12, 0.12, 0.12, 1.0)
+
+            cr.rectangle(0, y, width, self.LINE_HEIGHT)
+            cr.fill()
+
+            cr.set_source_rgb(0.9, 0.9, 0.9)
+            cr.move_to(self.GUTTER_WIDTH, y)
+            layout.set_text(parsed.content)
+            PangoCairo.show_layout(cr, layout)
+
+            y += self.LINE_HEIGHT
 
 
 class DiffView(Gtk.Box if GTK_AVAILABLE else object):
@@ -213,6 +302,17 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
         footer = self._create_footer()
         self.append(footer)
 
+    def _clear_children(self) -> None:
+        """Remove all direct children using the GTK4 widget API."""
+        if not self._gtk_available:
+            return
+
+        child = self.get_first_child()
+        while child is not None:
+            next_child = child.get_next_sibling()
+            self.remove(child)
+            child = next_child
+
     def _create_header(self) -> Gtk.Widget:
         """Create the header with view mode toggle."""
         if not self._gtk_available:
@@ -259,23 +359,37 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
         return footer
 
     def _setup_unified_view(self) -> None:
-        """Set up unified diff view (single column with line numbers)."""
+        """Set up unified diff view (single column with line numbers via Cairo rendering)."""
         if not self._gtk_available:
             return
 
-        source_view = self._create_source_view()
-        buffer = source_view.get_buffer()
-
         if self._is_empty:
+            source_view = self._create_source_view()
+            buffer = source_view.get_buffer()
             no_changes = "No changes" if not self._path else f"No changes in {self._path}"
             buffer.set_text(no_changes)
+            self._content_scrolled.set_child(source_view)
         else:
             self._parsed_lines = DiffParser.parse(self._diff_text)
-            text = self._format_unified_text()
-            buffer.set_text(text)
+            cairo_area = CairoDiffArea(self._parsed_lines)
+            self._cairo_area = cairo_area
+            with suppress(AttributeError, TypeError):
+                Gtk.Accessible.update_property(
+                    cairo_area,
+                    [Gtk.AccessibleProperty.LABEL],
+                    [f"Diff view: {len(self._parsed_lines)} lines"],
+                )
+            self._content_scrolled.set_child(cairo_area)
 
-        self._apply_diff_highlighting(buffer)
-        self._content_scrolled.set_child(source_view)
+    def scroll_to_hunk(self, hunk_index: int) -> None:
+        """Scroll the virtualized unified view to a hunk header."""
+        if not self._gtk_available or not hasattr(self, "_cairo_area"):
+            return
+        headers = [
+            i for i, line in enumerate(self._parsed_lines) if line.line_type == DiffLineType.HEADER
+        ]
+        if 0 <= hunk_index < len(headers):
+            self._cairo_area.scroll_to_line(headers[hunk_index])
 
     def _setup_split_view(self) -> None:
         """Set up split diff view (side-by-side old and new)."""
@@ -309,8 +423,8 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
         new_scroll.set_child(new_view)
         new_scroll.set_size_request(300, -1)
 
-        paned.append(old_scroll)
-        paned.append(new_scroll)
+        paned.set_start_child(old_scroll)
+        paned.set_end_child(new_scroll)
 
         self._content_scrolled.set_child(paned)
 
@@ -440,7 +554,7 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
             self._view_mode = new_mode
             toggle.set_label("Unified View" if new_mode == "split" else "Split View")
 
-            self.foreach(lambda child: self.remove(child))
+            self._clear_children()
             self._setup_ui()
 
             if self._on_view_mode_changed:
@@ -456,8 +570,8 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
             except Exception as e:
                 logger.warning(f"Failed to persist view mode preference: {e}")
 
-        if self._gtk_available and hasattr(self, "foreach"):
-            self.foreach(lambda child: self.remove(child))
+        if self._gtk_available:
+            self._clear_children()
             self._setup_ui()
 
             if self._on_view_mode_changed:
@@ -487,5 +601,5 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
         self._is_empty = not self._diff_text or not self._diff_text.strip()
 
         if self._gtk_available:
-            self.foreach(lambda child: self.remove(child))
+            self._clear_children()
             self._setup_ui()
