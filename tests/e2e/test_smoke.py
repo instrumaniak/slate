@@ -8,7 +8,6 @@ To run:
 """
 
 import pytest
-from dogtail.predicate import GenericPredicate
 
 
 @pytest.mark.timeout(30)
@@ -16,8 +15,7 @@ from dogtail.predicate import GenericPredicate
 @pytest.mark.e2e
 def test_side_panel_accessible_name(slate_accessible):
     """Side panel should be accessible with test mode name."""
-    from tests.e2e.driver.queries import find_side_panel
-    from tests.e2e.driver.queries import find_window
+    from tests.e2e.driver.queries import find_side_panel, find_window
 
     window = find_window(slate_accessible)
 
@@ -32,8 +30,7 @@ def test_side_panel_accessible_name(slate_accessible):
 @pytest.mark.e2e
 def test_tab_bar_accessible_name(slate_accessible):
     """Tab bar should be accessible with test mode name."""
-    from tests.e2e.driver.queries import find_tab_bar
-    from tests.e2e.driver.queries import find_window
+    from tests.e2e.driver.queries import find_tab_bar, find_window
 
     window = find_window(slate_accessible)
 
@@ -51,8 +48,7 @@ def test_toggle_panel_action_exists(slate_accessible):
     import time
 
     from tests.e2e.driver.actions import toggle_side_panel_shortcut
-    from tests.e2e.driver.queries import find_side_panel
-    from tests.e2e.driver.queries import find_window
+    from tests.e2e.driver.queries import find_side_panel, find_window
 
     window = find_window(slate_accessible)
     panel = find_side_panel(window)

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from slate.core.plugin_api import AbstractPlugin, PluginContext, ActivityBarItem
+from slate.core.plugin_api import AbstractPlugin, ActivityBarItem, PluginContext
 
 if TYPE_CHECKING:
     from slate.ui.panels.file_explorer_tree import FileExplorerTree

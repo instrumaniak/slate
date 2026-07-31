@@ -5,20 +5,21 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gdk, Gio, GObject, GLib, Gtk, Pango  # noqa: E402
+from gi.repository import Gdk, Gio, GLib, GObject, Gtk, Pango  # noqa: E402
 
 from slate.core.events import FolderOpenedEvent, OpenFileRequestedEvent  # noqa: E402
 
 if TYPE_CHECKING:
     from slate.core.event_bus import EventBus
-    from slate.services.file_service import FileService
-    from slate.services.config_service import ConfigService
     from slate.core.plugin_api import HostUIBridge
+    from slate.services.config_service import ConfigService
+    from slate.services.file_service import FileService
 
 logger = logging.getLogger(__name__)
 

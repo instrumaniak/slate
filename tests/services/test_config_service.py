@@ -345,9 +345,8 @@ class TestConfigServiceSaveFailures:
             temp_path = config_path.with_suffix(".ini.tmp")
             with patch(
                 "slate.services.config_service.os.open", side_effect=PermissionError("denied")
-            ):
-                with pytest.raises(PermissionError):
-                    service.set("app", "color_mode", "dark")
+            ), pytest.raises(PermissionError):
+                service.set("app", "color_mode", "dark")
 
             assert not temp_path.exists()
 
@@ -413,7 +412,7 @@ class TestConfigServiceDefaults:
             },
         }
 
-        assert DEFAULT_CONFIG == expected
+        assert expected == DEFAULT_CONFIG
 
 
 class TestConfigServiceEdgeCases:

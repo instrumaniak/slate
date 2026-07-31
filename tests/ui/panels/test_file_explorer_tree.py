@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from gi.repository import Gtk
@@ -38,7 +36,6 @@ def temp_project(tmp_path: Any) -> Any:
 @pytest.fixture
 def mock_file_service(temp_project: Any) -> MagicMock:
     """Create a mock FileService backed by real filesystem."""
-    from slate.core.models import FileStatus
     from slate.services.file_service import FileService
 
     service = FileService()
@@ -763,8 +760,8 @@ class TestContextMenusAndCopy:
         self, mock_file_service: Any, event_bus: EventBus, temp_project: Any
     ) -> None:
         """Secondary click should create a popover menu for the current item."""
-        from slate.ui.panels.file_explorer_tree import FileExplorerTree
         from slate.ui.panels import file_explorer_tree as tree_module
+        from slate.ui.panels.file_explorer_tree import FileExplorerTree
 
         widget = FileExplorerTree(file_service=mock_file_service, event_bus=event_bus)
         widget.load_folder(str(temp_project))
@@ -801,8 +798,8 @@ class TestContextMenusAndCopy:
         self, mock_file_service: Any, event_bus: EventBus, temp_project: Any
     ) -> None:
         """Secondary click should clean up any existing popover before opening a new one."""
-        from slate.ui.panels.file_explorer_tree import FileExplorerTree
         from slate.ui.panels import file_explorer_tree as tree_module
+        from slate.ui.panels.file_explorer_tree import FileExplorerTree
 
         widget = FileExplorerTree(file_service=mock_file_service, event_bus=event_bus)
         widget.load_folder(str(temp_project))
@@ -881,8 +878,8 @@ class TestContextMenusAndCopy:
         self, mock_file_service: Any, event_bus: EventBus, temp_project: Any
     ) -> None:
         """Secondary click should sync selection to the clicked row before actions run."""
-        from slate.ui.panels.file_explorer_tree import FileExplorerTree
         from slate.ui.panels import file_explorer_tree as tree_module
+        from slate.ui.panels.file_explorer_tree import FileExplorerTree
 
         widget = FileExplorerTree(file_service=mock_file_service, event_bus=event_bus)
         widget.load_folder(str(temp_project))

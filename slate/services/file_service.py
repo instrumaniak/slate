@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import logging
 import os
-import threading
 import shutil
+import threading
 from typing import Any
 
 from slate.core.event_bus import EventBus
@@ -198,9 +198,8 @@ class FileService:
         if os.path.exists(target):
             raise FileExistsError(f"File already exists: {target}")
 
-        with self._lock:
-            with open(target, "w", encoding="utf-8"):
-                pass
+        with self._lock, open(target, "w", encoding="utf-8"):
+            pass
 
         return target
 

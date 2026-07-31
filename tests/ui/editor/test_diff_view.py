@@ -139,7 +139,6 @@ class TestDiffViewModes:
 
     def test_view_mode_persists_via_config_service(self) -> None:
         """View mode preference should be persisted via ConfigService."""
-        from unittest.mock import Mock
         from slate.ui.editor.diff_view import DiffView
 
         mock_config = Mock()

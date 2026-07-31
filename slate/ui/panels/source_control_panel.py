@@ -58,6 +58,7 @@ class SourceControlPanel(Gtk.Box):
         self._host_bridge = host_bridge
         self._current_path: str | None = None
         self._current_branch: str | None = None
+        self._updating_dropdown: bool = False
         self._status_items: list[FileStatusItem] = []
         self._branches: list[BranchInfo] = []
 
@@ -239,6 +240,9 @@ class SourceControlPanel(Gtk.Box):
 
     def _on_branch_changed(self, dropdown: Gtk.ComboBoxText) -> None:
         """Handle branch dropdown selection."""
+        if getattr(self, "_updating_dropdown", False):
+            return
+
         active_index = dropdown.get_active()
         if active_index < 0:
             return
@@ -250,6 +254,10 @@ class SourceControlPanel(Gtk.Box):
         # Strip " (current)" suffix if present
         if branch_name.endswith(" (current)"):
             branch_name = branch_name[:-10]
+
+        # Don't switch if already on selected branch
+        if branch_name == self._current_branch:
+            return
 
         # Validate branch name exists in branches list
         if not any(b.name == branch_name for b in self._branches):
@@ -355,23 +363,29 @@ class SourceControlPanel(Gtk.Box):
 
     def _update_branch_dropdown(self) -> None:
         """Update branch dropdown with current branches."""
-        self._branch_dropdown.remove_all()
+        self._updating_dropdown = True
+        try:
+            self._branch_dropdown.remove_all()
 
-        if not self._branches:
-            return
+            if not self._branches:
+                return
 
-        current_branch_index = -1
-        for i, branch in enumerate(self._branches):
-            display_name = branch.name
-            if branch.is_current:
-                display_name = f"{branch.name} (current)"
-                current_branch_index = i
-            self._branch_dropdown.append_text(display_name)
+            current_branch_index = -1
+            for i, branch in enumerate(self._branches):
+                display_name = branch.name
+                if branch.is_current:
+                    display_name = f"{branch.name} (current)"
+                    current_branch_index = i
+                    self._current_branch = branch.name
+                self._branch_dropdown.append_text(display_name)
 
-        if current_branch_index >= 0:
-            self._branch_dropdown.set_active(current_branch_index)
-        elif self._branches:
-            self._branch_dropdown.set_active(0)
+            if current_branch_index >= 0:
+                self._branch_dropdown.set_active(current_branch_index)
+            elif self._branches:
+                self._branch_dropdown.set_active(0)
+                self._current_branch = self._branches[0].name
+        finally:
+            self._updating_dropdown = False
 
     def set_current_path(self, path: str) -> None:
         """Set current repository path and refresh."""

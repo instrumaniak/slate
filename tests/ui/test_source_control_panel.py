@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
-
-from slate.ui.panels.source_control_panel import SourceControlPanel, FileStatusItem
+from slate.ui.panels.source_control_panel import FileStatusItem, SourceControlPanel
 
 
 class MockGitService:
@@ -132,6 +130,25 @@ class TestSourceControlPanel:
         # For now, just verify the update method was called
         assert panel._branches == git_service.branches_data
 
+    def test_branch_dropdown_no_recursion_on_update(self) -> None:
+        """Updating branch dropdown should not invoke switch_branch."""
+        git_service = MockGitService()
+
+        from slate.core.models import BranchInfo
+
+        git_service.branches_data = [
+            BranchInfo(name="main", is_current=True, is_remote=False, last_commit="abc123"),
+        ]
+
+        panel = SourceControlPanel(git_service=git_service)
+        panel.set_current_path("/test/path")
+
+        # Simulate dropdown update
+        panel._update_branch_dropdown()
+
+        # switch_branch should NOT be triggered by updating the dropdown
+        assert git_service.switch_branch_called is False
+
     def test_activity_badge_updates(self) -> None:
         """Activity badge should update with change count."""
         git_service = MockGitService()
@@ -185,7 +202,6 @@ class TestSourceControlPanelDiffView:
 
     def test_on_item_activated_with_valid_item(self) -> None:
         """Clicking a status item should trigger diff viewing."""
-        from unittest.mock import MagicMock
 
         git_service = MockGitService()
         git_service.get_diff = MagicMock(return_value="diff content")
@@ -212,7 +228,6 @@ class TestSourceControlPanelDiffView:
 
     def test_on_item_activated_staged_file(self) -> None:
         """Clicking a staged file should request staged diff."""
-        from unittest.mock import MagicMock
 
         git_service = MockGitService()
         git_service.get_diff = MagicMock(return_value="staged diff content")

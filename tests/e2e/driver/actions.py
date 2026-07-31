@@ -1,10 +1,10 @@
 """E2E driver - reusable accessibility actions."""
 
+import subprocess
 from typing import Any
 
 from dogtail.predicate import GenericPredicate
 from dogtail.rawinput import keyCombo
-import subprocess
 
 
 def click(node: Any) -> None:
