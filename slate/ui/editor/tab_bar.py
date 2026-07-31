@@ -36,6 +36,7 @@ class TabBar(Gtk.Box):
         self._tab_dirty_indicators: dict = {}
         self._active_path: str | None = None
         self._tab_order: list = []
+        self._syncing_selection = False
 
         if not GTK_AVAILABLE:
             logger.warning("GTK not available - TabBar is a placeholder")
@@ -94,13 +95,16 @@ class TabBar(Gtk.Box):
         close_btn.add_controller(click_controller)
 
         def on_toggled(_btn) -> None:
+            if self._syncing_selection:
+                return
             if _btn.get_active():
-                if self._active_path != path:
-                    self._active_path = path
+                previous = self._active_path
+                self._active_path = path
+                self._set_button_states(path)
+                if previous != path:
                     self.emit("tab-selected", path)
-            else:
-                if self._active_path == path:
-                    _btn.set_active(True)
+            elif self._active_path == path:
+                self._set_button_states(path)
 
         tab_button.connect("toggled", on_toggled)
 
@@ -151,8 +155,17 @@ class TabBar(Gtk.Box):
         if path not in self._tabs:
             return
 
-        for p, btn in self._tabs.items():
-            btn.set_active(p == path)
+        self._active_path = path
+        self._set_button_states(path)
+
+    def _set_button_states(self, active_path: str) -> None:
+        """Synchronize button state without recursively handling toggles."""
+        self._syncing_selection = True
+        try:
+            for p, btn in self._tabs.items():
+                btn.set_active(p == active_path)
+        finally:
+            self._syncing_selection = False
 
     def get_tabs(self) -> list:
         """Get list of tab paths in order."""

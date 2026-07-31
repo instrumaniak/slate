@@ -76,13 +76,20 @@ class SlateWindow(Gtk.ApplicationWindow):
         self._tab_manager.set_close_dialog_callback(self._show_close_dialog)
 
         from slate.core.event_bus import EventBus
-        from slate.core.events import FileOpenedEvent, FolderOpenedEvent, OpenDiffRequestedEvent
+        from slate.core.events import (
+            FileOpenedEvent,
+            FolderOpenedEvent,
+            OpenDiffRequestedEvent,
+            TabActivatedEvent,
+        )
 
         self._event_bus = EventBus()
         self._event_bus.subscribe(FileOpenedEvent, self._on_file_opened)
+        self._event_bus.subscribe(TabActivatedEvent, self._on_tab_activated)
         self._event_bus.subscribe(OpenDiffRequestedEvent, self._on_open_diff_requested)
         self._event_bus.subscribe(FolderOpenedEvent, self._on_folder_opened)
         self._current_folder: str | None = None
+        self._displayed_tab: str | None = None
 
         self._setup_window_geometry()
         self._apply_theme()
@@ -353,14 +360,25 @@ class SlateWindow(Gtk.ApplicationWindow):
 
     def _on_tab_selected(self, tab_bar, path: str) -> None:
         """Handle tab selection."""
-        previous = self._tab_manager.get_active_tab()
+        self._activate_tab(path)
+
+    def _on_tab_activated(self, event) -> None:
+        """Show a tab activated by an open request or keyboard cycling."""
+        self._activate_tab(event.path)
+
+    def _activate_tab(self, path: str) -> None:
+        """Synchronize manager, tab bar, and editor view for one active tab."""
+        if path not in self._tab_manager.get_tabs():
+            return
+
+        previous = getattr(self, "_displayed_tab", None)
         if previous and previous != path:
             self._snapshot_editor(previous)
-            old_widget = self._tab_manager.detach_widget(previous)
-            if old_widget is not None and self._editor_scroll.get_child() is old_widget:
-                self._editor_scroll.set_child(None)
+
         self._tab_manager.set_active_tab(path)
+        self._tab_bar.set_active(path)
         self._update_editor_for_tab(path)
+        self._displayed_tab = path
 
     def _on_tab_close_requested(self, tab_bar, path: str) -> None:
         """Handle tab close request."""
@@ -374,14 +392,15 @@ class SlateWindow(Gtk.ApplicationWindow):
             if editor_view and self._editor_scroll.get_child() is editor_view:
                 self._editor_scroll.set_child(None)
             self._tab_bar.remove_tab(path)
+            if self._displayed_tab == path:
+                self._displayed_tab = None
 
             if not self._tab_manager.get_tabs():
                 self._editor_scroll.set_child(None)
             else:
                 active = self._tab_manager.get_active_tab()
                 if active:
-                    self._tab_bar.set_active(active)
-                    self._update_editor_for_tab(active)
+                    self._activate_tab(active)
 
     def _update_editor_for_tab(self, path: str) -> None:
         """Update editor container to show the selected tab's editor."""
@@ -494,8 +513,7 @@ class SlateWindow(Gtk.ApplicationWindow):
                 self._show_file_open_error(path, tab.get("content", ""))
             if path not in self._tab_bar.get_tabs():
                 self._tab_bar.add_tab(path, path.split("/")[-1])
-            self._tab_bar.set_active(path)
-            self._update_editor_for_tab(path)
+            self._activate_tab(path)
 
     def _on_open_diff_requested(self, event) -> None:
         """Handle OpenDiffRequestedEvent - display diff in editor area."""
@@ -558,8 +576,7 @@ class SlateWindow(Gtk.ApplicationWindow):
         else:
             self._tab_bar.update_tab_label(diff_path, diff_label)
 
-        self._tab_bar.set_active(diff_path)
-        self._editor_scroll.set_child(diff_container)
+        self._activate_tab(diff_path)
 
     def _show_file_open_error(self, path: str, content: str) -> None:
         """Show a toast for file-open failures instead of rendering error text."""
@@ -603,6 +620,7 @@ class SlateWindow(Gtk.ApplicationWindow):
             ("undo", "z", self._on_undo),
             ("redo", "y", self._on_redo),
             ("next_tab", "Tab", self._on_next_tab),
+            ("previous_tab", "Tab", self._on_previous_tab),
             ("explorer_focus", "o", self._on_explorer_focus),
         ]
         if self._test_mode:
@@ -626,6 +644,7 @@ class SlateWindow(Gtk.ApplicationWindow):
             "<Primary>z": "win.undo",
             "<Primary>y": "win.redo",
             "Tab": "win.next_tab",
+            "<Primary><Shift>Tab": "win.previous_tab",
         }
         if self._test_mode:
             shortcuts_to_bind["<Primary>q"] = "win.quit_app"
@@ -644,7 +663,9 @@ class SlateWindow(Gtk.ApplicationWindow):
         logger.debug("Keyboard shortcut: new tab")
 
     def _on_close_tab(self) -> None:
-        logger.debug("Keyboard shortcut: close tab")
+        path = self._tab_manager.get_active_tab()
+        if path is not None:
+            self._on_tab_close_requested(self._tab_bar, path)
 
     def _on_save_file(self) -> None:
         path = self._tab_manager.get_active_tab()
@@ -739,7 +760,10 @@ class SlateWindow(Gtk.ApplicationWindow):
         logger.debug("Keyboard shortcut: redo")
 
     def _on_next_tab(self) -> None:
-        logger.debug("Keyboard shortcut: next tab")
+        self._tab_manager.cycle_next()
+
+    def _on_previous_tab(self) -> None:
+        self._tab_manager.cycle_previous()
 
     def _on_explorer_focus(self) -> None:
         """Focus the file explorer panel."""

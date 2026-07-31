@@ -1,6 +1,5 @@
 # Slate - GTK4 Code Editor
 
-Context7 MCP enabled for library docs (see global `~/.config/opencode/AGENTS.md`)
 
 ## ⚠️ SYSTEM SAFETY MANDATES
 

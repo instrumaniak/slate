@@ -1,6 +1,6 @@
 # Story 3.3: Source Control — Inline Diff Viewing
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

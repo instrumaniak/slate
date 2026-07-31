@@ -169,13 +169,20 @@ class TabManager:
                     logger.error(f"Failed to save file {path}: {e}")
                     return False
 
+        was_active = self._active_tab == path
+        active_index = self._tab_order.index(path) if path in self._tab_order else -1
+
         del self._tabs[path]
         self._tab_states.pop(path, None)
         if path in self._tab_order:
             self._tab_order.remove(path)
 
-        if self._active_tab == path:
-            self._active_tab = next(iter(self._tabs), None)
+        if was_active:
+            if self._tab_order:
+                next_index = min(active_index, len(self._tab_order) - 1)
+                self._active_tab = self._tab_order[next_index]
+            else:
+                self._active_tab = None
 
         self._event_bus.emit(TabClosedEvent(path=path))
         return True
