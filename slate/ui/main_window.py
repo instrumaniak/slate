@@ -342,6 +342,7 @@ class SlateWindow(Gtk.ApplicationWindow):
         self._tab_bar = TabBar()
         self._tab_bar.connect("tab-selected", self._on_tab_selected)
         self._tab_bar.connect("tab-close-requested", self._on_tab_close_requested)
+        self._tab_bar.connect("close-all-requested", self._on_close_all_requested)
 
         if self._test_mode:
             self._try_set_accessible_name(self._tab_bar, "slate-tab-bar")
@@ -382,9 +383,18 @@ class SlateWindow(Gtk.ApplicationWindow):
 
     def _on_tab_close_requested(self, tab_bar, path: str) -> None:
         """Handle tab close request."""
+        self._close_tab(path)
+
+    def _close_tab(self, path: str, snapshot: bool = True) -> bool:
+        """Close one tab and synchronize its tab-bar/editor presentation."""
         tab = self._tab_manager.get_tabs().get(path)
         editor_view = tab.get("editor_view") if tab else None
-        if tab is not None and editor_view is not None and hasattr(editor_view, "get_content"):
+        if (
+            snapshot
+            and tab is not None
+            and editor_view is not None
+            and hasattr(editor_view, "get_content")
+        ):
             self._tab_manager.set_tab_content(path, editor_view.get_content())
 
         closed = self._tab_manager.close_tab(path)
@@ -401,6 +411,17 @@ class SlateWindow(Gtk.ApplicationWindow):
                 active = self._tab_manager.get_active_tab()
                 if active:
                     self._activate_tab(active)
+        return closed
+
+    def _on_close_all_requested(self, _tab_bar) -> None:
+        """Close every tab while preserving each tab's close confirmation."""
+        displayed = self._displayed_tab
+        if displayed:
+            self._snapshot_editor(displayed)
+
+        for path in list(self._tab_manager.get_tab_list()):
+            if not self._close_tab(path, snapshot=False):
+                break
 
     def _update_editor_for_tab(self, path: str) -> None:
         """Update editor container to show the selected tab's editor."""

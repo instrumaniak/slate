@@ -21,6 +21,7 @@ class TabBar(Gtk.Box):
 
     __gsignals__ = {
         "tab-close-requested": (GObject.SignalFlags.RUN_LAST, None, (str,)),
+        "close-all-requested": (GObject.SignalFlags.RUN_LAST, None, ()),
         "tab-selected": (GObject.SignalFlags.RUN_LAST, None, (str,)),
         "tab-reordered": (GObject.SignalFlags.RUN_LAST, None, (object, int)),
     }
@@ -30,6 +31,7 @@ class TabBar(Gtk.Box):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL)
         self.set_homogeneous(False)
         self.set_spacing(0)
+        self.set_margin_top(2)
 
         self._tabs: dict = {}
         self._tab_labels: dict = {}
@@ -49,11 +51,52 @@ class TabBar(Gtk.Box):
 
         self._tab_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self._tab_box.set_spacing(0)
+        self._tab_box.set_hexpand(False)
+        self._tab_box.set_halign(Gtk.Align.START)
 
         self._scrolled.set_child(self._tab_box)
         self.append(self._scrolled)
 
+        self._menu_button = Gtk.MenuButton()
+        self._menu_button.set_icon_name("view-more-symbolic")
+        self._menu_button.set_tooltip_text("Tab options")
+        self._menu_button.set_css_classes(["flat"])
+
+        popover = Gtk.Popover()
+        self._menu_button.set_popover(popover)
+        popover_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        popover_box.set_margin_start(12)
+        popover_box.set_margin_end(12)
+        popover_box.set_margin_top(8)
+        popover_box.set_margin_bottom(8)
+        close_all_button = Gtk.Button(label="Close All Tabs")
+        close_all_button.connect("clicked", self._on_close_all_clicked)
+        popover_box.append(close_all_button)
+        popover.set_child(popover_box)
+        self._close_all_button = close_all_button
+        self.append(self._menu_button)
+
+        self._install_css()
+
         self.set_visible(False)
+
+    def _install_css(self) -> None:
+        """Install the tab shape and active-tab styling."""
+        css = """
+        .slate-tab.active {
+            background-color: @view_bg_color;
+            border-radius: 10px 10px 0 0;
+        }
+        """
+        provider = Gtk.CssProvider()
+        provider.load_from_data(css.encode("utf-8"))
+        self.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self._tab_css = css
+        self._css_provider = provider
+
+    def _on_close_all_clicked(self, _button: Gtk.Button) -> None:
+        """Emit the close-all request from the popover action."""
+        self.emit("close-all-requested")
 
     def add_tab(self, path: str, label: str, is_dirty: bool = False) -> None:
         """Add a new tab to the bar."""
@@ -64,7 +107,7 @@ class TabBar(Gtk.Box):
             return
 
         tab_button = Gtk.ToggleButton()
-        tab_button.set_css_classes(["flat"])
+        tab_button.set_css_classes(["flat", "slate-tab"])
 
         dirty_indicator = Gtk.Label(label="")
         if is_dirty:
@@ -73,7 +116,7 @@ class TabBar(Gtk.Box):
 
         label_widget = Gtk.Label(label=label)
         label_widget.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
-        label_widget.set_max_width_chars(20)
+        label_widget.set_halign(Gtk.Align.START)
         self._tab_labels[path] = label_widget
 
         close_btn = Gtk.Button()
@@ -164,6 +207,10 @@ class TabBar(Gtk.Box):
         try:
             for p, btn in self._tabs.items():
                 btn.set_active(p == active_path)
+                if p == active_path:
+                    btn.add_css_class("active")
+                else:
+                    btn.remove_css_class("active")
         finally:
             self._syncing_selection = False
 

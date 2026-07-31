@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
 from gi.repository import Gtk
 
 
@@ -56,6 +57,31 @@ def test_on_save_file_persists_active_editor_content() -> None:
     tab_manager.save_tab.assert_called_once_with("/tmp/test.txt", "updated content")
     editor_view.mark_clean.assert_called_once_with()
     tab_bar.set_dirty.assert_called_once_with("/tmp/test.txt", False)
+
+
+@pytest.mark.timeout(30)
+def test_close_all_snapshots_displayed_tab_and_stops_after_cancel() -> None:
+    """Close-all should use stable order and stop when one close is cancelled."""
+    from slate.ui.main_window import SlateWindow
+
+    window = SlateWindow.__new__(SlateWindow)
+    window._displayed_tab = "/tmp/two.py"
+    window._snapshot_editor = MagicMock()
+    window._tab_manager = MagicMock()
+    window._tab_manager.get_tab_list.return_value = [
+        "/tmp/one.py",
+        "/tmp/two.py",
+        "/tmp/three.py",
+    ]
+    window._close_tab = MagicMock(side_effect=[True, False])
+
+    window._on_close_all_requested(MagicMock())
+
+    window._snapshot_editor.assert_called_once_with("/tmp/two.py")
+    assert window._close_tab.call_args_list == [
+        (("/tmp/one.py",), {"snapshot": False}),
+        (("/tmp/two.py",), {"snapshot": False}),
+    ]
 
 
 def test_register_shortcuts_binds_each_action_to_its_own_callback(monkeypatch) -> None:
