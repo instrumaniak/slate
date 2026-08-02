@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from slate.services.config_service import ConfigService
     from slate.services.theme_service import ThemeService
+    from slate.ui.toast import SlateToast
 
 import gi
 
@@ -64,7 +65,7 @@ class SlateWindow(Gtk.ApplicationWindow):
         self._plugin_manager = plugin_manager
         self._editor_scheme = "Adwaita"  # Default until theme is resolved
         self._overlay = Gtk.Overlay()
-        self._toast = None
+        self._toast: SlateToast | None = None
 
         from slate.services import get_file_service
 
@@ -328,7 +329,7 @@ class SlateWindow(Gtk.ApplicationWindow):
 
         return side_panel
 
-    def _create_editor_area(self) -> Gtk.Box:
+    def _create_editor_area(self) -> Gtk.Widget:
         """Create main editor area with tab bar."""
         from slate.ui.editor.tab_bar import TabBar
 
@@ -498,7 +499,7 @@ class SlateWindow(Gtk.ApplicationWindow):
 
         self._event_bus.emit(FolderOpenedEvent(path=path))
 
-    def _create_editor_view_for_tab(self, path: str, tab: dict) -> None:
+    def _create_editor_view_for_tab(self, path: str, tab: dict[str, Any]) -> None:
         """Create EditorView for a tab and store it."""
         from slate.ui.editor.editor_view import EditorView
 
@@ -507,9 +508,9 @@ class SlateWindow(Gtk.ApplicationWindow):
 
             message = tab.get("content", "Failed to open file")
             details = message.split("\n", 1)[1].strip() if "\n" in message else message
-            editor_view = ErrorPlaceholder("Could not open file", details)
-            self._tab_manager.attach_widget(path, editor_view)
-            self._editor_scroll.set_child(editor_view)
+            placeholder = ErrorPlaceholder("Could not open file", details)
+            self._tab_manager.attach_widget(path, placeholder)
+            self._editor_scroll.set_child(placeholder)
             return
 
         editor_view = EditorView(
@@ -517,7 +518,7 @@ class SlateWindow(Gtk.ApplicationWindow):
             content=tab.get("content", ""),
             editor_scheme=self._editor_scheme,
             editor_settings=self._config_service.get_editor_settings(),
-            on_modified_changed=lambda dirty, p=path: self._on_editor_modified(p, dirty),
+            on_modified_changed=lambda dirty: self._on_editor_modified(path, dirty),
         )
 
         self._tab_manager.attach_widget(path, editor_view)
@@ -551,6 +552,10 @@ class SlateWindow(Gtk.ApplicationWindow):
         git_service = get_git_service()
         if not git_service:
             self.show_notification("Git service not available", 3000)
+            return
+
+        if self._current_folder is None:
+            self.show_notification("No folder open", 3000)
             return
 
         try:
@@ -670,10 +675,10 @@ class SlateWindow(Gtk.ApplicationWindow):
         if self._test_mode:
             shortcuts_to_bind["<Primary>q"] = "win.quit_app"
 
-        for key, action in shortcuts_to_bind.items():
+        for key, action_name in shortcuts_to_bind.items():
             try:
                 trigger = Gtk.ShortcutTrigger.parse_string(key)
-                shortcut = Gtk.Shortcut.new(trigger, Gtk.NamedAction.new(action))
+                shortcut = Gtk.Shortcut.new(trigger, Gtk.NamedAction.new(action_name))
                 shortcut_controller.add_shortcut(shortcut)
             except Exception as e:
                 logger.warning(f"Failed to parse shortcut {key}: {e}")
@@ -762,7 +767,8 @@ class SlateWindow(Gtk.ApplicationWindow):
             self._toast = SlateToast(self._overlay)
 
         duration = max(1, round(timeout_ms / 1000))
-        self._toast.show(message, duration=duration)
+        if self._toast is not None:
+            self._toast.show(message, duration=duration)
 
     def focus_panel(self, plugin_id: str) -> None:
         """HostUIBridge: Focus (show) the panel for the given plugin."""
@@ -815,7 +821,7 @@ class SlateWindow(Gtk.ApplicationWindow):
         except Exception as e:
             logger.error(f"Failed to save window geometry: {e}")
 
-    def _on_close_request(self, *args) -> None:
+    def _on_close_request(self, *args) -> bool:
         self.save_geometry()
         if self._test_mode:
             return False
@@ -824,13 +830,13 @@ class SlateWindow(Gtk.ApplicationWindow):
             path for path, tab in self._tab_manager.get_tabs().items() if tab.get("is_dirty", False)
         ]
         if not dirty_tabs:
-            return
+            return False
 
         for path in dirty_tabs:
             filename = os.path.basename(path)
             result = self._show_close_dialog(filename, path)
             if result == "cancel":
-                return
+                return True
             if result == "save":
                 tab = self._tab_manager.get_tabs().get(path, {})
                 content = tab.get("content", "")
@@ -841,7 +847,8 @@ class SlateWindow(Gtk.ApplicationWindow):
                     file_service.write_file(path, content)
                 except Exception as e:
                     logger.error(f"Failed to save file {path}: {e}")
-                    return
+                    return True
+        return False
 
     def close(self) -> None:
         self.save_geometry()

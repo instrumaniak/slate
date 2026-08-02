@@ -257,3 +257,13 @@ pytest tests/core/ tests/services/ -v
 - 4 are stale `# type: ignore[import-untyped]` comments (delete; became unused after pygobject-stubs installed)
 - ~15 are real code fixes (return types, variable shadowing, void return capture)
 - ~6 are missing function annotations
+
+### Code review remarks (2026-08-02)
+
+- The 2 surviving `# type: ignore` suppressions (`editor_view.py:45`,
+  `file_explorer_tree.py:275`) were given explanatory comments during the T002
+  review; both carry specific error codes per the constraints.
+- `slate/__main__.py` (typed in Step 15) was later adjusted so
+  `check_environment()` runs after `parse_args()`, keeping
+  `python -m slate --version` functional on headless/GTK-less machines. See
+  T002 notes for details.

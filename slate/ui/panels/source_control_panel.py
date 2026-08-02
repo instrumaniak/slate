@@ -8,9 +8,10 @@ from typing import TYPE_CHECKING, Any
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gio, GObject, Gtk, Pango  # noqa: E402
+from gi.repository import Gio, GLib, GObject, Gtk, Pango  # noqa: E402
 
 from slate.core.events import (  # noqa: E402
+    BaseEvent,
     FolderOpenedEvent,
     GitStatusChangedEvent,
     OpenDiffRequestedEvent,
@@ -114,8 +115,9 @@ class SourceControlPanel(Gtk.Box):
             self._event_bus.unsubscribe(GitStatusChangedEvent, self._on_git_status_changed)
             self._event_bus.unsubscribe(FolderOpenedEvent, self._on_folder_opened)
 
-    def _on_folder_opened(self, event: FolderOpenedEvent) -> None:
+    def _on_folder_opened(self, event: BaseEvent) -> None:
         """Handle folder opened event - update current path and refresh git status."""
+        assert isinstance(event, FolderOpenedEvent)
         self.set_current_path(event.path)
 
     def _build_header(self) -> Gtk.Box:
@@ -291,12 +293,14 @@ class SourceControlPanel(Gtk.Box):
         model = list_view.get_model()
         if model is None:
             return
+        if not isinstance(model, Gtk.SingleSelection):
+            return
 
         selected_item = model.get_selected_item() if position is None else model.get_item(position)
         if not isinstance(selected_item, FileStatusItem):
             return
 
-        if self._current_path and self._git_service:
+        if self._current_path and self._git_service and self._event_bus:
             try:
                 repo_path = self._current_path
                 file_path = selected_item.path
@@ -308,8 +312,9 @@ class SourceControlPanel(Gtk.Box):
                 logger.error(f"Failed to get diff for {selected_item.path}: {e}")
                 self._show_error(f"Failed to open diff: {e}")
 
-    def _on_git_status_changed(self, event: GitStatusChangedEvent) -> None:
+    def _on_git_status_changed(self, event: BaseEvent) -> None:
         """Handle git status changed event."""
+        assert isinstance(event, GitStatusChangedEvent)
         if self._current_path and event.path == self._current_path:
             self.refresh_status()
 
@@ -330,7 +335,7 @@ class SourceControlPanel(Gtk.Box):
         parent = self.get_root() if hasattr(self, "get_root") else None
 
         dialog = Gtk.Dialog()
-        if parent:
+        if isinstance(parent, Gtk.Window):
             dialog.set_transient_for(parent)
         dialog.set_modal(True)
         dialog.set_title("Switch Branch")
@@ -349,9 +354,21 @@ class SourceControlPanel(Gtk.Box):
         label.set_margin_end(16)
         content_area.append(label)
 
-        response = dialog.run()
+        # Gtk.Dialog.run() was removed in GTK4, so run the dialog with a nested
+        # GLib main loop driven by the "response" signal instead.
+        result: list[int] = []
+        main_loop = GLib.MainLoop.new(None, False)
+
+        def _on_response(response_dialog: Gtk.Dialog, response_id: int) -> None:
+            result.append(response_id)
+            response_dialog.hide()
+            main_loop.quit()
+
+        dialog.connect("response", _on_response)
+        dialog.present()
+        main_loop.run()
         dialog.destroy()
-        return response == Gtk.ResponseType.OK
+        return bool(result and result[0] == Gtk.ResponseType.OK)
 
     def _show_error(self, message: str) -> None:
         """Show error message in error label."""

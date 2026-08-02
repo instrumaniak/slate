@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 import pytest
@@ -295,7 +296,5 @@ class TestPermissionDenied:
             )
             widget.load_folder(str(root))
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 hidden_dir.chmod(0o755)
-            except Exception:
-                pass

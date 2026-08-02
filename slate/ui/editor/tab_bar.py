@@ -2,18 +2,12 @@ from __future__ import annotations
 
 import logging
 
+import gi
+
+gi.require_version("Gtk", "4.0")
+from gi.repository import GObject, Gtk, Pango  # noqa: E402
+
 logger = logging.getLogger(__name__)
-
-try:
-    import gi
-
-    gi.require_version("Gtk", "4.0")
-    from gi.repository import GObject, Gtk, Pango
-
-    GTK_AVAILABLE = True
-except (ImportError, ValueError):
-    GTK_AVAILABLE = False
-    Gtk = GObject = Pango = None
 
 
 class TabBar(Gtk.Box):
@@ -33,16 +27,12 @@ class TabBar(Gtk.Box):
         self.set_spacing(0)
         self.set_margin_top(2)
 
-        self._tabs: dict = {}
-        self._tab_labels: dict = {}
-        self._tab_dirty_indicators: dict = {}
+        self._tabs: dict[str, Gtk.ToggleButton] = {}
+        self._tab_labels: dict[str, Gtk.Label] = {}
+        self._tab_dirty_indicators: dict[str, Gtk.Label] = {}
         self._active_path: str | None = None
-        self._tab_order: list = []
+        self._tab_order: list[str] = []
         self._syncing_selection = False
-
-        if not GTK_AVAILABLE:
-            logger.warning("GTK not available - TabBar is a placeholder")
-            return
 
         self._scrolled = Gtk.ScrolledWindow()
         self._scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
@@ -89,7 +79,9 @@ class TabBar(Gtk.Box):
         }
         """
         provider = Gtk.CssProvider()
-        provider.load_from_data(css.encode("utf-8"))
+        from slate.ui.editor.editor_view import apply_css
+
+        apply_css(provider, css)
         self.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         self._tab_css = css
         self._css_provider = provider
@@ -100,9 +92,6 @@ class TabBar(Gtk.Box):
 
     def add_tab(self, path: str, label: str, is_dirty: bool = False) -> None:
         """Add a new tab to the bar."""
-        if not GTK_AVAILABLE:
-            return
-
         if path in self._tabs:
             return
 
@@ -168,9 +157,6 @@ class TabBar(Gtk.Box):
 
     def remove_tab(self, path: str) -> None:
         """Remove a tab from the bar."""
-        if not GTK_AVAILABLE:
-            return
-
         if path not in self._tabs:
             return
 
@@ -192,9 +178,6 @@ class TabBar(Gtk.Box):
 
     def set_active(self, path: str) -> None:
         """Set active tab."""
-        if not GTK_AVAILABLE:
-            return
-
         if path not in self._tabs:
             return
 
@@ -214,7 +197,7 @@ class TabBar(Gtk.Box):
         finally:
             self._syncing_selection = False
 
-    def get_tabs(self) -> list:
+    def get_tabs(self) -> list[str]:
         """Get list of tab paths in order."""
         return self._tab_order.copy()
 
@@ -251,7 +234,7 @@ class TabBar(Gtk.Box):
         label_widget = self._tab_labels[path]
         label_widget.set_text(label)
 
-    def reorder_tabs(self, new_order: list) -> None:
+    def reorder_tabs(self, new_order: list[str]) -> None:
         """Reorder tabs based on drag and drop.
 
         Args:

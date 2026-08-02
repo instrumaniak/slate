@@ -15,23 +15,14 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+import cairo
+import gi
+
+gi.require_version("GtkSource", "5")
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gtk, GtkSource, Pango, PangoCairo  # noqa: E402
+
 logger = logging.getLogger(__name__)
-
-try:
-    import cairo
-    import gi
-
-    gi.require_version("GtkSource", "5")
-    gi.require_version("Gtk", "4.0")
-    from gi.repository import Gdk, Gtk, GtkSource, Pango, PangoCairo
-
-    GTK_AVAILABLE = Gdk.Display.get_default() is not None
-except (ImportError, ValueError):
-    GTK_AVAILABLE = False
-    Gtk = None
-    GtkSource = None
-    Pango = None
-    PangoCairo = None
 
 ADDITION_BG_COLOR = "#2ea04320"
 DELETION_BG_COLOR = "#f8514920"
@@ -142,7 +133,7 @@ class DiffParser:
         return parsed_lines
 
 
-class CairoDiffArea(Gtk.DrawingArea if GTK_AVAILABLE else object):
+class CairoDiffArea(Gtk.DrawingArea):
     """Virtualized Cairo drawing area for high-performance diff rendering."""
 
     LINE_HEIGHT = 20
@@ -153,8 +144,6 @@ class CairoDiffArea(Gtk.DrawingArea if GTK_AVAILABLE else object):
         parsed_lines: list[ParsedDiffLine] | None = None,
         editor_settings: dict[str, str] | None = None,
     ) -> None:
-        if not GTK_AVAILABLE:
-            return
         super().__init__()
         self._parsed_lines = parsed_lines or []
         self._pango_layout: Pango.Layout | None = None
@@ -171,12 +160,9 @@ class CairoDiffArea(Gtk.DrawingArea if GTK_AVAILABLE else object):
     def set_parsed_lines(self, parsed_lines: list[ParsedDiffLine]) -> None:
         self._parsed_lines = parsed_lines
         self._update_virtual_size()
-        if GTK_AVAILABLE:
-            self.queue_draw()
+        self.queue_draw()
 
     def _update_virtual_size(self) -> None:
-        if not GTK_AVAILABLE:
-            return
         total_lines = len(self._parsed_lines)
         total_height = max(total_lines * self._line_height, 100)
         self.set_content_height(total_height)
@@ -185,14 +171,12 @@ class CairoDiffArea(Gtk.DrawingArea if GTK_AVAILABLE else object):
     def _ensure_layout(self) -> Pango.Layout:
         if self._pango_layout is None:
             pctx = self.get_pango_context()
-            self._pango_layout = Pango.Layout(pctx)
+            self._pango_layout = Pango.Layout.new(pctx)
             self._pango_layout.set_font_description(self._font_description)
         return self._pango_layout
 
     def scroll_to_line(self, line_number: int) -> None:
         """Scroll the containing GTK scroller to a zero-based rendered line."""
-        if not GTK_AVAILABLE:
-            return
         parent = self.get_parent()
         while parent is not None and not isinstance(parent, Gtk.ScrolledWindow):
             parent = parent.get_parent()
@@ -237,14 +221,12 @@ class CairoDiffArea(Gtk.DrawingArea if GTK_AVAILABLE else object):
             y += self._line_height
 
 
-class DiffView(Gtk.Box if GTK_AVAILABLE else object):
+class DiffView(Gtk.Box):
     """Widget for displaying git diffs with syntax highlighting.
 
     Supports unified (default) and split view modes with proper
     line numbers and addition/deletion highlighting.
     """
-
-    _gtk_available: bool = GTK_AVAILABLE
 
     def __init__(
         self,
@@ -263,15 +245,6 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
             on_view_mode_changed: Optional callback when view mode changes.
             config_service: Optional ConfigService instance for persisting view mode preference.
         """
-        if not DiffView._gtk_available:
-            logger.warning("GTK not available - DiffView is a placeholder")
-            self._path = path
-            self._diff_text = diff_text
-            self._view_mode = view_mode
-            self._is_empty = not diff_text or not diff_text.strip()
-            self._config_service = None
-            return
-
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
         self._path = path
@@ -296,9 +269,6 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
 
     def _setup_ui(self) -> None:
         """Set up the widget UI structure."""
-        if not self._gtk_available:
-            return
-
         header = self._create_header()
         self.append(header)
 
@@ -318,9 +288,6 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
 
     def _clear_children(self) -> None:
         """Remove all direct children using the GTK4 widget API."""
-        if not self._gtk_available:
-            return
-
         child = self.get_first_child()
         while child is not None:
             next_child = child.get_next_sibling()
@@ -329,9 +296,6 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
 
     def _create_header(self) -> Gtk.Widget:
         """Create the header with view mode toggle."""
-        if not self._gtk_available:
-            return Gtk.Box()
-
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         header.set_margin_start(6)
         header.set_margin_end(6)
@@ -355,9 +319,6 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
 
     def _create_footer(self) -> Gtk.Widget:
         """Create the footer with file path info."""
-        if not self._gtk_available:
-            return Gtk.Box()
-
         footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         footer.set_margin_start(6)
         footer.set_margin_end(6)
@@ -374,11 +335,9 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
 
     def _setup_unified_view(self) -> None:
         """Set up unified diff view (single column with line numbers via Cairo rendering)."""
-        if not self._gtk_available:
-            return
-
         if self._is_empty:
             source_view = self._create_source_view()
+            assert source_view is not None
             buffer = source_view.get_buffer()
             no_changes = "No changes" if not self._path else f"No changes in {self._path}"
             buffer.set_text(no_changes)
@@ -397,7 +356,7 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
 
     def scroll_to_hunk(self, hunk_index: int) -> None:
         """Scroll the virtualized unified view to a hunk header."""
-        if not self._gtk_available or not hasattr(self, "_cairo_area"):
+        if not hasattr(self, "_cairo_area"):
             return
         headers = [
             i for i, line in enumerate(self._parsed_lines) if line.line_type == DiffLineType.HEADER
@@ -407,15 +366,14 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
 
     def _setup_split_view(self) -> None:
         """Set up split diff view (side-by-side old and new)."""
-        if not self._gtk_available:
-            return
-
         paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         paned.set_hexpand(True)
         paned.set_vexpand(True)
 
         old_view = self._create_source_view()
         new_view = self._create_source_view()
+        assert old_view is not None
+        assert new_view is not None
 
         if self._is_empty:
             no_changes = "No changes"
@@ -442,11 +400,8 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
 
         self._content_scrolled.set_child(paned)
 
-    def _create_source_view(self) -> GtkSource.View:
+    def _create_source_view(self) -> GtkSource.View | None:
         """Create a GtkSourceView configured for diff display."""
-        if not self._gtk_available:
-            return None
-
         view = GtkSource.View()
         view.set_show_line_numbers(True)
         view.set_monospace(True)
@@ -513,9 +468,6 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
 
     def _apply_diff_highlighting(self, buffer: GtkSource.Buffer) -> None:
         """Apply syntax highlighting for additions and deletions."""
-        if not self._gtk_available:
-            return
-
         try:
             lang_manager = GtkSource.LanguageManager.get_default()
             language = lang_manager.get_language("diff")
@@ -543,24 +495,23 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
         addition_pattern = re.compile(r"^\+.*$", re.MULTILINE)
         deletion_pattern = re.compile(r"^-.*$", re.MULTILINE)
 
-        addition_tag = tag_table.lookup("addition")
-        deletion_tag = tag_table.lookup("deletion")
+        found_addition_tag = tag_table.lookup("addition")
+        found_deletion_tag = tag_table.lookup("deletion")
+        assert found_addition_tag is not None
+        assert found_deletion_tag is not None
 
         for match in addition_pattern.finditer(text):
             start_iter = buffer.get_iter_at_offset(match.start())
             end_iter = buffer.get_iter_at_offset(match.end())
-            buffer.apply_tag(addition_tag, start_iter, end_iter)
+            buffer.apply_tag(found_addition_tag, start_iter, end_iter)
 
         for match in deletion_pattern.finditer(text):
             start_iter = buffer.get_iter_at_offset(match.start())
             end_iter = buffer.get_iter_at_offset(match.end())
-            buffer.apply_tag(deletion_tag, start_iter, end_iter)
+            buffer.apply_tag(found_deletion_tag, start_iter, end_iter)
 
     def _on_view_mode_toggled(self, toggle: Gtk.ToggleButton) -> None:
         """Handle view mode toggle button."""
-        if not self._gtk_available:
-            return
-
         new_mode = "split" if toggle.get_active() else "unified"
         if new_mode != self._view_mode:
             self._view_mode = new_mode
@@ -582,12 +533,11 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
             except Exception as e:
                 logger.warning(f"Failed to persist view mode preference: {e}")
 
-        if self._gtk_available:
-            self._clear_children()
-            self._setup_ui()
+        self._clear_children()
+        self._setup_ui()
 
-            if self._on_view_mode_changed:
-                self._on_view_mode_changed(self._view_mode)
+        if self._on_view_mode_changed:
+            self._on_view_mode_changed(self._view_mode)
 
     def _show_no_changes_message(self) -> bool:
         """Check if 'No changes' message should be shown."""
@@ -612,6 +562,5 @@ class DiffView(Gtk.Box if GTK_AVAILABLE else object):
         self._diff_text = diff_text if diff_text is not None else ""
         self._is_empty = not self._diff_text or not self._diff_text.strip()
 
-        if self._gtk_available:
-            self._clear_children()
-            self._setup_ui()
+        self._clear_children()
+        self._setup_ui()

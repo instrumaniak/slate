@@ -64,7 +64,7 @@ class MockPluginContext(PluginContext):
         self._services = services or {}
         self._bridge = MockHostBridge()
         self._emitted_events: list[Any] = []
-        self.event_bus = MagicMock()
+        self._event_bus = MagicMock()
 
     @property
     def plugin_id(self) -> str:
@@ -73,6 +73,10 @@ class MockPluginContext(PluginContext):
     @property
     def host_bridge(self):
         return self._bridge
+
+    @property
+    def event_bus(self):
+        return self._event_bus
 
     def get_service(self, service_name: str) -> Any:
         return self._services.get(service_name)

@@ -69,7 +69,7 @@ class SourceControlPlugin(AbstractPlugin):
 
         return factory
 
-    def get_panel_widget(self) -> SourceControlPanel:
+    def get_panel_widget(self) -> SourceControlPanel | None:
         """Return the panel widget for display in the side panel. Lazy create on first access."""
         if self._panel_widget is None and self._panel_factory is not None:
             self._panel_widget = self._panel_factory()

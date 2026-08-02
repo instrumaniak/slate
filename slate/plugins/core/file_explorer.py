@@ -81,7 +81,7 @@ class FileExplorerPlugin(AbstractPlugin):
 
         return create_widget
 
-    def get_panel_widget(self) -> FileExplorerTree:
+    def get_panel_widget(self) -> FileExplorerTree | None:
         """Return the panel widget for display in the side panel. Lazy create on first access."""
         if self._panel_widget is None and self._panel_factory is not None:
             try:

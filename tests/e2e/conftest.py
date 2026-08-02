@@ -14,9 +14,7 @@ def _check_atspi_available():
             capture_output=True,
             timeout=5,
         )
-        if proc.returncode != 0:
-            return False
-        return True
+        return proc.returncode == 0
     except Exception:
         return False
 
@@ -112,10 +110,9 @@ def slate_app_subprocess(require_display, require_dbus, require_atspi):
 
     ready, stderr_output = _wait_for_ready(proc, timeout=10)
 
-    if not ready:
-        if proc.poll() is not None:
-            pytest.fail(f"Slate failed to start: {''.join(stderr_output)}")
-        # Allow fallback readiness detection via AT-SPI in slate_accessible.
+    if not ready and proc.poll() is not None:
+        pytest.fail(f"Slate failed to start: {''.join(stderr_output)}")
+    # Allow fallback readiness detection via AT-SPI in slate_accessible.
 
     time.sleep(0.5)
     proc._stderr_output = stderr_output  # type: ignore[attr-defined]

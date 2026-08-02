@@ -3,18 +3,12 @@ from __future__ import annotations
 import asyncio
 import logging
 
+import gi
+
+gi.require_version("Gtk", "4.0")
+from gi.repository import GLib, Gtk  # noqa: E402
+
 logger = logging.getLogger(__name__)
-
-try:
-    import gi
-
-    gi.require_version("Gtk", "4.0")
-    from gi.repository import GLib, Gtk
-
-    GTK_AVAILABLE = True
-except (ImportError, ValueError):
-    GTK_AVAILABLE = False
-    Gtk = GLib = None
 
 
 class SaveDiscardDialog:
@@ -31,11 +25,6 @@ class SaveDiscardDialog:
             parent: Parent window for the dialog.
             filename: Name of the file being closed.
         """
-        if not GTK_AVAILABLE:
-            logger.warning("GTK not available - SaveDiscardDialog is a placeholder")
-            self._dialog = None
-            return
-
         self._parent = parent
         self._filename = filename
         self._result: str | None = None
@@ -75,7 +64,7 @@ class SaveDiscardDialog:
 
     def _setup_keyboard_handling(self) -> None:
         """Setup keyboard handling for Enter=Save, Escape=Cancel."""
-        if not GTK_AVAILABLE:
+        if self._dialog is None:
             return
 
         controller = Gtk.EventControllerKey.new()
@@ -98,6 +87,9 @@ class SaveDiscardDialog:
         """
         from gi.repository import Gdk
 
+        if self._dialog is None:
+            return False
+
         if keyval == Gdk.KEY_Return or keyval == Gdk.KEY_KP_Enter:
             self._dialog.response(Gtk.ResponseType.YES)
             return True
@@ -113,8 +105,9 @@ class SaveDiscardDialog:
             dialog: The dialog.
             response_id: The response type.
         """
-        self._result = self._response_map.get(response_id, "cancel")
-        self._dialog.hide()
+        self._result = self._response_map.get(Gtk.ResponseType(response_id), "cancel")
+        if self._dialog is not None:
+            self._dialog.hide()
         if self._main_loop and self._main_loop.is_running():
             self._main_loop.quit()
 
@@ -124,11 +117,9 @@ class SaveDiscardDialog:
         Returns:
             "save", "discard", or "cancel"
         """
-        if not GTK_AVAILABLE:
-            return "cancel"
-
         self._main_loop = GLib.MainLoop.new(None, False)
-        self._dialog.present()
+        if self._dialog is not None:
+            self._dialog.present()
         self._main_loop.run()
         self._main_loop = None
 
@@ -143,17 +134,16 @@ class SaveDiscardDialog:
         Returns:
             "save", "discard", or "cancel"
         """
-        if not GTK_AVAILABLE:
-            return "cancel"
-
-        self._dialog.present()
+        if self._dialog is not None:
+            self._dialog.present()
         elapsed = 0.0
         while self._result is None:
             await asyncio.sleep(0.05)
             elapsed += 0.05
             if elapsed >= timeout:
                 logger.warning("SaveDiscardDialog timed out after %.1fs", timeout)
-                self._dialog.hide()
+                if self._dialog is not None:
+                    self._dialog.hide()
                 return "cancel"
 
         return self._result

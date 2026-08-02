@@ -5,22 +5,20 @@ import os
 import signal
 import sys
 import tempfile
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("GtkSource", "5")
+from gi.repository import Gio, Gtk  # noqa: E402
+
+if TYPE_CHECKING:
+    from slate.services.config_service import ConfigService
+    from slate.services.theme_service import ThemeService
+    from slate.ui.main_window import SlateWindow
 
 logger = logging.getLogger(__name__)
-
-try:
-    import gi
-
-    gi.require_version("Gtk", "4.0")
-    gi.require_version("GtkSource", "5")
-    from gi.repository import Gio, Gtk
-
-    GTK_AVAILABLE = True
-except (ImportError, ValueError) as e:
-    print(f"Missing required GTK components: {e}", file=sys.stderr)
-    print("Install: python3-gi gir1.2-gtk-4.0 gir1.2-gtksource-5", file=sys.stderr)
-    sys.exit(1)
 
 
 class SlateApplication(Gtk.Application):
@@ -43,10 +41,10 @@ class SlateApplication(Gtk.Application):
         )
 
         self._test_mode = test_mode
-        self._config_service = None
-        self._theme_service = None
+        self._config_service: ConfigService | None = None
+        self._theme_service: ThemeService | None = None
         self._file_service = None
-        self._main_window = None
+        self._main_window: SlateWindow | None = None
         self._ready_emitted = False
 
         if self._test_mode:
@@ -93,9 +91,11 @@ class SlateApplication(Gtk.Application):
 
         # Step 1: Load config
         self._config_service = get_config_service()
+        assert self._config_service is not None
 
         # Step 2: Resolve theme before window creation
         self._theme_service = get_theme_service()
+        assert self._theme_service is not None
         self._theme_service.resolve_theme()
 
         # Step 3: Create window FIRST (provides HostUIBridge for plugins)
@@ -109,6 +109,7 @@ class SlateApplication(Gtk.Application):
             plugin_manager,
             test_mode=self._test_mode,
         )
+        assert self._main_window is not None
         if self._test_mode:
             self._emit_ready_signal()
 
@@ -118,7 +119,12 @@ class SlateApplication(Gtk.Application):
         class AppPluginContext(PluginContext):
             """Concrete PluginContext that provides access to app services."""
 
-            def __init__(self, config_service, theme_service, host_bridge):
+            def __init__(
+                self,
+                config_service: ConfigService,
+                theme_service: ThemeService,
+                host_bridge: Any,
+            ) -> None:
                 self._config_service = config_service
                 self._theme_service = theme_service
                 self._host_bridge = host_bridge

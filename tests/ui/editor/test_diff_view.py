@@ -160,7 +160,6 @@ class TestDiffViewModes:
         second.get_next_sibling.return_value = None
 
         view = DiffView.__new__(DiffView)
-        view._gtk_available = True
         view.get_first_child = Mock(return_value=first)
         view.remove = Mock()
 

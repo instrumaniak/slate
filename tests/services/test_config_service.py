@@ -18,7 +18,7 @@ class TestConfigServiceInitialization:
         """Config directory should be created if it doesn't exist."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             config_path = Path(tmp_dir) / "config.ini"
-            service = ConfigService(config_path=str(config_path))
+            ConfigService(config_path=str(config_path))
 
             assert config_path.parent.exists()
             assert config_path.exists()
@@ -356,9 +356,12 @@ class TestConfigServiceSaveFailures:
             service = ConfigService(config_path=str(config_path))
 
             temp_path = config_path.with_suffix(".ini.tmp")
-            with patch(
-                "slate.services.config_service.os.open", side_effect=PermissionError("denied")
-            ), pytest.raises(PermissionError):
+            with (
+                patch(
+                    "slate.services.config_service.os.open", side_effect=PermissionError("denied")
+                ),
+                pytest.raises(PermissionError),
+            ):
                 service.set("app", "color_mode", "dark")
 
             assert not temp_path.exists()
@@ -494,15 +497,13 @@ class TestConfigServiceDefaultPath:
 
     def test_uses_default_path_when_none_provided(self):
         """Should use ~/.config/slate/config.ini when no path provided."""
-        expected_path = Path.home() / ".config" / "slate" / "config.ini"
-
         # Mock all file system operations to avoid creating real files
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            mock_config_path = Path(tmp_dir) / "config.ini"
-
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(Path, "home", return_value=Path(tmp_dir)),
+        ):
             # Patch the Path.home() to return our temp directory structure
-            with patch.object(Path, "home", return_value=Path(tmp_dir)):
-                service = ConfigService()
+            service = ConfigService()
 
         # Verify the service initialized with expected default path structure
         assert service._config_path.name == "config.ini"

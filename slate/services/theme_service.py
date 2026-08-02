@@ -142,7 +142,7 @@ class ThemeService:
             import gi
 
             gi.require_version("Gtk", "4.0")
-            from gi.repository import Gtk  # type: ignore[import-untyped]
+            from gi.repository import Gtk
 
             settings = Gtk.Settings.get_default()
             if settings is None:
@@ -167,7 +167,7 @@ class ThemeService:
             import gi
 
             gi.require_version("Gtk", "4.0")
-            from gi.repository import Gtk  # type: ignore[import-untyped]
+            from gi.repository import Gtk
 
             settings = Gtk.Settings.get_default()
             if settings is not None:
@@ -208,13 +208,11 @@ class ThemeService:
                 import gi
 
                 gi.require_version("Gtk", "4.0")
-                from gi.repository import Gtk  # type: ignore[import-untyped]
+                from gi.repository import Gtk
 
                 settings = Gtk.Settings.get_default()
                 if settings is not None:
-                    success = settings.disconnect(self._theme_watcher_id)
-                    if not success:
-                        logger.warning("Failed to disconnect theme watcher signal")
+                    settings.disconnect(self._theme_watcher_id)
             except Exception as e:
                 logger.warning(f"Error disconnecting theme watcher: {e}")
             finally:

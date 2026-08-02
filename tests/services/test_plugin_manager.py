@@ -37,6 +37,12 @@ class MockPluginContext(PluginContext):
     def host_bridge(self):
         return None
 
+    @property
+    def event_bus(self):
+        from slate.core.event_bus import EventBus
+
+        return EventBus()
+
 
 @pytest.fixture
 def mock_context():

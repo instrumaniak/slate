@@ -307,7 +307,7 @@ class FileService:
                 import gi
 
                 gi.require_version("Gio", "2.0")
-                from gi.repository import Gio  # type: ignore[import-untyped]
+                from gi.repository import Gio
             except ImportError as e:
                 raise ImportError(
                     "GIO not available. Install GTK/GIO development libraries."

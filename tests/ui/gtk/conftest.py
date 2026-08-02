@@ -1,3 +1,4 @@
+import contextlib
 import gc
 import os
 
@@ -19,10 +20,8 @@ def cleanup_after_test():
                 with open(f"/proc/{child}/cmdline", "rb") as f:
                     cmdline = f.read()
                     if b"slate" in cmdline or b"SlateApplication" in cmdline:
-                        try:
+                        with contextlib.suppress(ProcessLookupError, PermissionError):
                             os.kill(int(child), 9)
-                        except (ProcessLookupError, PermissionError):
-                            pass
             except (FileNotFoundError, PermissionError):
                 pass
 
@@ -98,10 +97,8 @@ def gtk_app_activated(gtk_app):
 
             print(f"Warning: window.close() raised: {e}", file=sys.stderr)
 
-    try:
+    with contextlib.suppress(Exception):
         gtk_app.quit()
-    except Exception:
-        pass
 
 
 def wait_for(condition, timeout=1.0, interval=0.01):

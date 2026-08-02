@@ -71,7 +71,7 @@ class TestLazyLoadingPerformance:
         for folder_item in folder_items[:10]:
             start = time.perf_counter()
 
-            store = widget._create_list_model_for_dir(folder_item.path)
+            widget._create_list_model_for_dir(folder_item.path)
 
             elapsed = time.perf_counter() - start
             timings.append(elapsed * 1000)
@@ -146,7 +146,7 @@ class TestLazyLoadingPerformance:
 
         widget._on_create_child_model = tracking_create
 
-        store = widget._on_create_child_model(first_folder)
+        widget._on_create_child_model(first_folder)
 
         widget._on_create_child_model = original_create
 

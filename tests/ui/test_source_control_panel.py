@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
+from gi.repository import Gtk
 
 from slate.ui.panels.source_control_panel import FileStatusItem, SourceControlPanel
 
@@ -197,6 +198,91 @@ class TestSourceControlPanel:
         assert item2.status == "A"
         # display_path defaults to path if not provided
         assert item2.display_path == "/test/path/file2.py"
+
+
+class TestSourceControlPanelDirtyWarningDialog:
+    """Test the dirty-working-tree branch switch safety dialog."""
+
+    pytestmark = pytest.mark.timeout(10)
+
+    @pytest.mark.parametrize(
+        "response_id,expected",
+        [(Gtk.ResponseType.CANCEL, False), (Gtk.ResponseType.OK, True)],
+    )
+    def test_dialog_response_maps_to_return_value(self, monkeypatch, response_id, expected):
+        """Dialog should run via nested main loop and map response to a bool."""
+        from slate.ui.panels.source_control_panel import SourceControlPanel
+
+        panel = SourceControlPanel()
+        dialog = MagicMock()
+        content_area = MagicMock()
+        dialog.add_button.return_value = MagicMock()
+        dialog.get_content_area.return_value = content_area
+
+        response_handler: dict[str, Any] = {}
+
+        def connect(signal_name: str, callback: Any) -> None:
+            assert signal_name == "response"
+            response_handler["cb"] = callback
+
+        dialog.connect.side_effect = connect
+
+        loop = MagicMock()
+        loop.run.side_effect = lambda: response_handler["cb"](dialog, response_id)
+
+        monkeypatch.setattr(
+            "slate.ui.panels.source_control_panel.Gtk.Dialog", MagicMock(return_value=dialog)
+        )
+        monkeypatch.setattr(
+            "slate.ui.panels.source_control_panel.GLib.MainLoop.new", MagicMock(return_value=loop)
+        )
+
+        assert panel._show_dirty_warning_dialog() is expected
+
+    def _make_panel(self, git_service: MockGitService) -> SourceControlPanel:
+        """Build a panel with a dirty tree, current branch main, and feature branch."""
+        from slate.core.models import BranchInfo
+
+        git_service.status_data = [{"path": "file.py", "status": "M"}]
+        git_service.branches_data = [
+            BranchInfo(name="main", is_current=True, is_remote=False, last_commit="abc"),
+            BranchInfo(name="feature", is_current=False, is_remote=False, last_commit="def"),
+        ]
+        panel = SourceControlPanel(git_service=git_service)
+        panel.set_current_path("/test/path")
+        return panel
+
+    @staticmethod
+    def _feature_dropdown() -> MagicMock:
+        """A dropdown whose selection points at the 'feature' branch."""
+        dropdown = MagicMock()
+        dropdown.get_active.return_value = 1
+        dropdown.get_active_text.return_value = "feature"
+        return dropdown
+
+    def test_dirty_tree_blocks_switch_when_user_cancels(self) -> None:
+        """Cancelling the warning should reset the dropdown and not switch."""
+        git_service = MockGitService()
+        panel = self._make_panel(git_service)
+
+        with patch.object(panel, "_show_dirty_warning_dialog", return_value=False) as warn:
+            panel._on_branch_changed(self._feature_dropdown())
+
+        warn.assert_called_once()
+        assert git_service.switch_branch_called is False
+
+    def test_dirty_tree_switches_when_user_confirms(self) -> None:
+        """Confirming the warning should switch to the selected branch."""
+        git_service = MockGitService()
+        panel = self._make_panel(git_service)
+
+        with patch.object(panel, "_show_dirty_warning_dialog", return_value=True) as warn:
+            panel._on_branch_changed(self._feature_dropdown())
+
+        warn.assert_called_once()
+        assert git_service.switch_branch_called is True
+        assert git_service.switch_branch_path == "/test/path"
+        assert git_service.switch_branch_name == "feature"
 
 
 class TestSourceControlPanelDiffView:

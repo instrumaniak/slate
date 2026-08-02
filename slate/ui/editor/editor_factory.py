@@ -3,18 +3,12 @@ from __future__ import annotations
 import logging
 import os
 
+import gi
+
+gi.require_version("GtkSource", "5")
+from gi.repository import GtkSource  # noqa: E402
+
 logger = logging.getLogger(__name__)
-
-try:
-    import gi
-
-    gi.require_version("GtkSource", "5")
-    from gi.repository import GtkSource
-
-    GTK_AVAILABLE = True
-except (ImportError, ValueError):
-    GTK_AVAILABLE = False
-    GtkSource = None
 
 
 LANGUAGE_MAP = {
@@ -51,6 +45,7 @@ class EditorViewFactory:
     """Factory for creating configured GtkSource.View instances."""
 
     _instance: EditorViewFactory | None = None
+    _language_manager: GtkSource.LanguageManager | None = None
 
     def __new__(cls) -> EditorViewFactory:
         if cls._instance is None:
@@ -63,11 +58,8 @@ class EditorViewFactory:
         """Reset singleton instance for testing."""
         cls._instance = None
 
-    def _get_language_manager(self):
+    def _get_language_manager(self) -> GtkSource.LanguageManager | None:
         """Lazy load the language manager."""
-        if not GTK_AVAILABLE:
-            return None
-
         if self._language_manager is None:
             self._language_manager = GtkSource.LanguageManager.get_default()
         return self._language_manager
@@ -84,9 +76,6 @@ class EditorViewFactory:
 
     def create_buffer(self, content: str = "", language_id: str | None = None):
         """Create a configured source buffer."""
-        if not GTK_AVAILABLE:
-            return None
-
         if language_id:
             lang_manager = self._get_language_manager()
             language = lang_manager.get_language(language_id) if lang_manager is not None else None
@@ -105,9 +94,6 @@ class EditorViewFactory:
 
     def apply_scheme(self, buffer, scheme: str) -> None:
         """Apply color scheme to buffer."""
-        if not GTK_AVAILABLE:
-            return
-
         style_manager = GtkSource.StyleSchemeManager.get_default()
         scheme_obj = style_manager.get_scheme(scheme)
 

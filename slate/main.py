@@ -3,12 +3,21 @@
 import os
 import sys
 
-from slate.ui.app import main as app_main
 from slate.version import __version__
 
 
 def main() -> int:
     """Application entry point."""
+    if any(arg in ("-v", "--version") for arg in sys.argv):
+        print(f"Slate v{__version__}")
+        return 0
+
+    from slate.services.environment_check import check_environment
+
+    check_environment()
+
+    from slate.ui.app import main as app_main
+
     if sys.version_info < (3, 10):
         print(
             f"Slate requires Python 3.10 or later. You are running Python "

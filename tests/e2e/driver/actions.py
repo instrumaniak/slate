@@ -1,5 +1,6 @@
 """E2E driver - reusable accessibility actions."""
 
+import contextlib
 import subprocess
 from typing import Any
 
@@ -80,11 +81,9 @@ def close_window(window: Any) -> None:
     if not toolbar:
         # Fallback to system close shortcut when no toolbar is exposed.
         if hasattr(window, "actions") and window.actions and "activate" in window.actions:
-            try:
+            with contextlib.suppress(Exception):
                 window.doActionNamed("activate")
-            except Exception:
-                pass
-        try:
+        with contextlib.suppress(Exception):
             subprocess.run(
                 [
                     "gdbus",
@@ -104,10 +103,10 @@ def close_window(window: Any) -> None:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-        except Exception:
-            pass
         try:
-            quit_btn = window.findChild(GenericPredicate(name="slate-quit-app", roleName="push button"))
+            quit_btn = window.findChild(
+                GenericPredicate(name="slate-quit-app", roleName="push button")
+            )
         except Exception:
             quit_btn = None
         if not quit_btn:
@@ -136,11 +135,9 @@ def close_window(window: Any) -> None:
         click(close_button)
     else:
         if hasattr(window, "actions") and window.actions and "activate" in window.actions:
-            try:
+            with contextlib.suppress(Exception):
                 window.doActionNamed("activate")
-            except Exception:
-                pass
-        try:
+        with contextlib.suppress(Exception):
             subprocess.run(
                 [
                     "gdbus",
@@ -160,10 +157,10 @@ def close_window(window: Any) -> None:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-        except Exception:
-            pass
         try:
-            quit_btn = window.findChild(GenericPredicate(name="slate-quit-app", roleName="push button"))
+            quit_btn = window.findChild(
+                GenericPredicate(name="slate-quit-app", roleName="push button")
+            )
         except Exception:
             quit_btn = None
         if not quit_btn:

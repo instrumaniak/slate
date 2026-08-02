@@ -9,27 +9,19 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+import gi
+
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gtk  # noqa: E402
+
 if TYPE_CHECKING:
     from slate.services.diff_parser import FileDiff
 
 logger = logging.getLogger(__name__)
 
-try:
-    import gi
 
-    gi.require_version("Gtk", "4.0")
-    from gi.repository import Gdk, Gtk
-
-    GTK_AVAILABLE = Gdk.Display.get_default() is not None
-except (ImportError, ValueError):
-    GTK_AVAILABLE = False
-    Gtk = None
-
-
-class DiffNavigator(Gtk.Box if GTK_AVAILABLE else object):
+class DiffNavigator(Gtk.Box):
     """Sidebar widget showing file list and hunk list for diff navigation."""
-
-    _gtk_available: bool = GTK_AVAILABLE
 
     def __init__(
         self,
@@ -42,11 +34,6 @@ class DiffNavigator(Gtk.Box if GTK_AVAILABLE else object):
             diffs: List of FileDiff objects.
             on_hunk_selected: Callback(file_index, hunk_index) when user selects a hunk.
         """
-        if not self._gtk_available:
-            self._diffs = diffs or []
-            self._on_hunk_selected = on_hunk_selected
-            return
-
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self._diffs = diffs or []
         self._on_hunk_selected = on_hunk_selected
@@ -58,9 +45,6 @@ class DiffNavigator(Gtk.Box if GTK_AVAILABLE else object):
 
     def _setup_ui(self) -> None:
         """Set up navigator UI list."""
-        if not self._gtk_available:
-            return
-
         label = Gtk.Label(label="Diff Navigation")
         label.set_xalign(0)
         label.set_margin_start(6)
@@ -82,14 +66,10 @@ class DiffNavigator(Gtk.Box if GTK_AVAILABLE else object):
             diffs: List of FileDiff objects.
         """
         self._diffs = diffs
-        if self._gtk_available:
-            self._update_items()
+        self._update_items()
 
     def _update_items(self) -> None:
         """Populate list view items."""
-        if not self._gtk_available:
-            return
-
         items: list[str] = []
         item_indices: list[tuple[int, int] | None] = []
         for file_idx, f_diff in enumerate(self._diffs):
@@ -106,8 +86,10 @@ class DiffNavigator(Gtk.Box if GTK_AVAILABLE else object):
         selection.connect("selection-changed", self._on_selection_changed)
         self._list_view.set_model(selection)
 
-    def _on_selection_changed(self, selection: object, _position: int, _n_items: int) -> None:
-        position = selection.get_selected()  # type: ignore[attr-defined]
+    def _on_selection_changed(
+        self, selection: Gtk.SingleSelection, _position: int, _n_items: int
+    ) -> None:
+        position = selection.get_selected()
         if position < 0 or position >= len(self._item_indices):
             return
         item = self._item_indices[position]

@@ -1,7 +1,14 @@
 tasks:
   T001:
     name: Fix Mypy Type Errors
-    status: pending
+    status: done
     depends: ~
+    phase: 0
+    critical: true
+  T002:
+    name: Centralize GTK Dependency Checks
+    status: done
+    depends:
+      - T001
     phase: 0
     critical: true

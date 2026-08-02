@@ -53,10 +53,15 @@ class SlateToast:
 
         action_btn = Gtk.Button(label=action_label)
         action_btn.add_css_class("flat")
-        action_btn.connect("clicked", lambda *_: (callback(), self.dismiss()))
+        action_btn.connect("clicked", lambda *_: self._on_action_clicked(callback))
         self._box.insert_child_after(action_btn, self._label)
 
         self.show(message, duration)
+
+    def _on_action_clicked(self, callback) -> None:
+        """Invoke the action callback and dismiss the toast."""
+        callback()
+        self.dismiss()
 
     def dismiss(self) -> None:
         if self._dismiss_timer_id is not None:

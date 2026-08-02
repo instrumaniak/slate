@@ -1,3 +1,4 @@
+import contextlib
 import gc
 
 import pytest
@@ -49,9 +50,7 @@ def cleanup_slate_processes():
                 with open(f"/proc/{child}/cmdline", "rb") as f:
                     cmdline = f.read()
                     if b"slate" in cmdline or b"SlateApplication" in cmdline:
-                        try:
+                        with contextlib.suppress(ProcessLookupError, PermissionError):
                             os.kill(int(child), 9)
-                        except (ProcessLookupError, PermissionError):
-                            pass
             except (FileNotFoundError, PermissionError):
                 pass

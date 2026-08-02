@@ -3,18 +3,12 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Mapping
 
+import gi
+
+gi.require_version("GtkSource", "5")
+from gi.repository import Gtk, GtkSource, Pango  # noqa: E402
+
 logger = logging.getLogger(__name__)
-
-try:
-    import gi
-
-    gi.require_version("GtkSource", "5")
-    from gi.repository import Gtk, GtkSource, Pango
-
-    GTK_AVAILABLE = True
-except (ImportError, ValueError):
-    GTK_AVAILABLE = False
-    GtkSource = Gtk = Pango = None
 
 
 DEFAULT_EDITOR_SETTINGS = {
@@ -42,11 +36,18 @@ def _setting_int(settings: Mapping[str, str], key: str, default: int, minimum: i
         return default
 
 
+def apply_css(provider: Gtk.CssProvider, css: str) -> None:
+    """Load a CSS string into a Gtk.CssProvider.
+
+    Uses load_from_data instead of load_from_string, which only exists in
+    GTK >= 4.8.
+    """
+    # load_from_data is untyped in pygobject-stubs (Gtk.pyi:8884 FIXME)
+    provider.load_from_data(css.encode("utf-8"))  # type: ignore[no-untyped-call]
+
+
 def apply_editor_settings(view, settings: Mapping[str, str] | None = None) -> None:
     """Apply persisted editor settings to a GtkSource.View instance."""
-    if not GTK_AVAILABLE:
-        return
-
     resolved = dict(DEFAULT_EDITOR_SETTINGS)
     if settings:
         resolved.update(settings)
@@ -71,15 +72,13 @@ def apply_editor_settings(view, settings: Mapping[str, str] | None = None) -> No
     escaped_family = family.replace("\\", "\\\\").replace('"', '\\"')
     css = f'textview {{ font-family: "{escaped_family}"; font-size: {size:g}pt; }}'
     provider = Gtk.CssProvider()
-    provider.load_from_data(css.encode("utf-8"))
+    apply_css(provider, css)
     view.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
     view._slate_font_css_provider = provider
 
 
-class EditorView(GtkSource.View if GTK_AVAILABLE else object):
+class EditorView(GtkSource.View):
     """Wrapper for syntax-highlighted editor view."""
-
-    _gtk_available: bool = GTK_AVAILABLE
 
     def __init__(
         self,
@@ -90,13 +89,6 @@ class EditorView(GtkSource.View if GTK_AVAILABLE else object):
         editor_settings: Mapping[str, str] | None = None,
     ) -> None:
         """Initialize EditorView."""
-        if not EditorView._gtk_available:
-            logger.warning("GTK not available - EditorView is a placeholder")
-            self._path = path
-            self._content = content or ""
-            self._buffer = None
-            return
-
         self._on_modified_changed = on_modified_changed
 
         from slate.ui.editor.editor_factory import EditorViewFactory
@@ -119,75 +111,51 @@ class EditorView(GtkSource.View if GTK_AVAILABLE else object):
 
     def _setup_basic_properties(self, settings: Mapping[str, str] | None = None) -> None:
         """Configure basic editor properties."""
-        if not self._gtk_available:
-            return
-
         apply_editor_settings(self, settings)
 
     def get_content(self) -> str:
         """Get current editor content."""
-        if not EditorView._gtk_available:
-            return self._content
-
         buffer = self.get_buffer()
-        return buffer.get_text(
-            buffer.get_start_iter(),
-            buffer.get_end_iter(),
-            include_hidden_chars=True,
+        return str(
+            buffer.get_text(
+                buffer.get_start_iter(),
+                buffer.get_end_iter(),
+                include_hidden_chars=True,
+            )
         )
 
     def set_content(self, content: str) -> None:
         """Set editor content."""
-        self._content = content
-        if not EditorView._gtk_available:
-            return
-
-        buffer = self.get_buffer()
-        buffer.set_text(content)
+        self.get_buffer().set_text(content)
 
     def get_language(self) -> str | None:
         """Get current buffer language ID."""
-        if not EditorView._gtk_available:
-            return None
-
         buffer = self.get_buffer()
         lang = buffer.get_language()
         if lang:
-            return lang.get_id()
+            return str(lang.get_id())
         return None
 
     def can_undo(self) -> bool:
         """Check if buffer can undo."""
-        if not EditorView._gtk_available:
-            return False
-
-        return self.get_buffer().can_undo()
+        return bool(self.get_buffer().get_can_undo())
 
     def can_redo(self) -> bool:
         """Check if buffer can redo."""
-        if not EditorView._gtk_available:
-            return False
-
-        return self.get_buffer().can_redo()
+        return bool(self.get_buffer().get_can_redo())
 
     def undo(self) -> None:
         """Perform undo on buffer."""
-        if EditorView._gtk_available:
-            self.get_buffer().undo()
+        self.get_buffer().undo()
 
     def redo(self) -> None:
         """Perform redo on buffer."""
-        if EditorView._gtk_available:
-            self.get_buffer().redo()
+        self.get_buffer().redo()
 
     def is_dirty(self) -> bool:
         """Check if buffer has unsaved changes."""
-        if not EditorView._gtk_available:
-            return False
-
-        return self.get_buffer().get_modified()
+        return bool(self.get_buffer().get_modified())
 
     def mark_clean(self) -> None:
         """Mark buffer as having no unsaved changes."""
-        if EditorView._gtk_available:
-            self.get_buffer().set_modified(False)
+        self.get_buffer().set_modified(False)

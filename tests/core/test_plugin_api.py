@@ -160,7 +160,6 @@ def test_host_ui_bridge_register_action_signature():
 
     sig = inspect.signature(HostUIBridge.register_action)
     params = list(sig.parameters.keys())
-    expected = ["self", "plugin_id", "action_id", "callback", "shortcut"]
     # shortcut may be optional
     assert params[:4] == ["self", "plugin_id", "action_id", "callback"]
     assert "shortcut" in params

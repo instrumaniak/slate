@@ -8,7 +8,7 @@ import sys
 logger = logging.getLogger(__name__)
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Parse command line arguments.
 
     Returns:
@@ -33,7 +33,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def resolve_path(path_arg):
+def resolve_path(path_arg: str | None) -> str | None:
     """Resolve CLI path argument to absolute path.
 
     Args:
@@ -60,14 +60,18 @@ def resolve_path(path_arg):
     return os.path.abspath(path)
 
 
-def main():
+def main() -> int:
     """Entry point for python -m slate."""
+    from slate.services.environment_check import check_environment
+
     args = parse_args()
 
     if len(sys.argv) > 2:
         logger.warning(f"Ignoring extra arguments: {sys.argv[2:]}")
 
     cli_path = resolve_path(args.path)
+
+    check_environment()
 
     from slate.ui.app import main as app_main
 

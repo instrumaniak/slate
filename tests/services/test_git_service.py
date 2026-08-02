@@ -338,9 +338,12 @@ class TestGitServiceZeroGtk:
                 for alias in node.names:
                     if alias.name == "gi" or alias.name.startswith("gi."):
                         module_level_gtk_imports.append(f"import {alias.name}")
-            elif isinstance(node, ast.ImportFrom):
-                if node.module and (node.module == "gi" or node.module.startswith("gi.")):
-                    module_level_gtk_imports.append(f"from {node.module}")
+            elif (
+                isinstance(node, ast.ImportFrom)
+                and node.module
+                and (node.module == "gi" or node.module.startswith("gi."))
+            ):
+                module_level_gtk_imports.append(f"from {node.module}")
 
         assert len(module_level_gtk_imports) == 0, (
             f"Found GTK imports at module level: {module_level_gtk_imports}"

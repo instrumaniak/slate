@@ -12,7 +12,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from slate.core.event_bus import EventBus
 
 # ==================== AbstractPlugin ====================
 
@@ -129,6 +132,12 @@ class PluginContext(ABC):
     @abstractmethod
     def host_bridge(self) -> HostUIBridge:
         """Get the host UI bridge for registering panels, actions, and dialogs."""
+        ...
+
+    @property
+    @abstractmethod
+    def event_bus(self) -> EventBus:
+        """Get the global event bus for emitting and subscribing to events."""
         ...
 
 

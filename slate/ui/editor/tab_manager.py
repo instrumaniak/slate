@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from slate.core.event_bus import EventBus
 from slate.core.events import (
+    BaseEvent,
     FileOpenedEvent,
     OpenFileRequestedEvent,
     TabActivatedEvent,
@@ -49,11 +50,11 @@ class TabManager:
             file_service: FileService instance for reading files.
         """
         self._file_service = file_service
-        self._tabs: dict[str, dict] = {}
+        self._tabs: dict[str, dict[str, Any]] = {}
         self._tab_states: dict[str, TabState] = {}
         self._active_tab: str | None = None
         self._tab_order: list[str] = []
-        self._close_dialog_callback: Callable | None = None
+        self._close_dialog_callback: Callable[[str, str], str] | None = None
 
         self._event_bus = EventBus()
         self._event_bus.subscribe(OpenFileRequestedEvent, self._on_open_file_requested)
@@ -66,11 +67,12 @@ class TabManager:
         """
         self._close_dialog_callback = callback
 
-    def _on_open_file_requested(self, event: OpenFileRequestedEvent) -> None:
+    def _on_open_file_requested(self, event: BaseEvent) -> None:
         """Handle OpenFileRequestedEvent - create new tab."""
+        assert isinstance(event, OpenFileRequestedEvent)
         self.open_tab(event.path)
 
-    def open_tab(self, path: str) -> dict:
+    def open_tab(self, path: str) -> dict[str, Any]:
         """Open a file in a new tab.
 
         Args:
@@ -119,7 +121,7 @@ class TabManager:
 
         return tab
 
-    def register_tab(self, tab: dict, widget: Any = None) -> None:
+    def register_tab(self, tab: dict[str, Any], widget: Any = None) -> None:
         """Register a tab whose content was produced outside the file service."""
         path = tab.get("path")
         if not isinstance(path, str) or not path:
@@ -187,7 +189,7 @@ class TabManager:
         self._event_bus.emit(TabClosedEvent(path=path))
         return True
 
-    def get_tabs(self) -> dict[str, dict]:
+    def get_tabs(self) -> dict[str, dict[str, Any]]:
         """Get all open tabs.
 
         Returns:

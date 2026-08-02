@@ -27,7 +27,7 @@ class TestThemeServiceInitialization:
         mock_config = Mock()
         mock_config.get.return_value = "dark"
 
-        service = ThemeService(config_service=mock_config)
+        ThemeService(config_service=mock_config)
 
         mock_config.get.assert_called_with("app", "color_mode")
 
@@ -281,12 +281,14 @@ class TestThemeServiceSystemDetection:
 
         service = ThemeService(config_service=mock_config)
 
-        with patch("subprocess.run") as mock_run:
+        with (
+            patch("subprocess.run") as mock_run,
+            patch.dict("sys.modules", {"gi.repository.Gtk": mock_gtk}),
+            patch("gi.require_version"),
+        ):
             mock_run.side_effect = FileNotFoundError("gsettings not found")
-            with patch.dict("sys.modules", {"gi.repository.Gtk": mock_gtk}):
-                with patch("gi.require_version"):
-                    result = service._detect_system_theme()
-                    assert result is False
+            result = service._detect_system_theme()
+            assert result is False
 
     def test_graceful_fallback_when_no_gtk(self):
         """Should return False (light) when GTK unavailable."""
@@ -322,12 +324,14 @@ class TestThemeServiceSystemDetection:
         mock_settings = MagicMock()
         mock_settings.get_property.return_value = True
 
-        with patch("subprocess.run", side_effect=FileNotFoundError("gsettings missing")):
-            with patch("gi.require_version"):
-                with patch("gi.repository.Gtk.Settings.get_default", return_value=mock_settings):
-                    with patch.object(service, "_setup_gtk_theme_watcher") as watcher:
-                        assert service._detect_system_theme() is True
-                        watcher.assert_called_once()
+        with (
+            patch("subprocess.run", side_effect=FileNotFoundError("gsettings missing")),
+            patch("gi.require_version"),
+            patch("gi.repository.Gtk.Settings.get_default", return_value=mock_settings),
+            patch.object(service, "_setup_gtk_theme_watcher") as watcher,
+        ):
+            assert service._detect_system_theme() is True
+            watcher.assert_called_once()
 
 
 class TestThemeServiceOnModeChanged:
@@ -504,11 +508,13 @@ class TestThemeServiceWatcherLifecycle:
 
         service = ThemeService(config_service=mock_config)
 
-        with patch("gi.require_version"):
-            with patch("gi.repository.Gtk.Settings.get_default", return_value=mock_settings):
-                service._setup_gtk_theme_watcher()
-                service._setup_gtk_theme_watcher()
-                service.shutdown()
+        with (
+            patch("gi.require_version"),
+            patch("gi.repository.Gtk.Settings.get_default", return_value=mock_settings),
+        ):
+            service._setup_gtk_theme_watcher()
+            service._setup_gtk_theme_watcher()
+            service.shutdown()
 
         mock_settings.connect.assert_called_once()
         mock_settings.disconnect.assert_called_with(42)
@@ -528,13 +534,15 @@ class TestThemeServiceZeroGtkImports:
 
         # Track indentation to detect module-level vs function-level
         module_level_imports = []
-        for i, line in enumerate(lines):
+        for _i, line in enumerate(lines):
             stripped = line.lstrip()
             # Module-level: no leading whitespace (or only at file start)
-            if stripped.startswith("from gi") or stripped.startswith("import gi"):
-                # Check if this is truly module level (no def/class before it or at column 0)
-                if not line.startswith(" ") and not line.startswith("\t"):
-                    module_level_imports.append(stripped)
+            if (
+                (stripped.startswith("from gi") or stripped.startswith("import gi"))
+                and not line.startswith(" ")
+                and not line.startswith("\t")
+            ):
+                module_level_imports.append(stripped)
 
         assert len(module_level_imports) == 0, (
             f"Found GTK import statements at module level: {module_level_imports}"

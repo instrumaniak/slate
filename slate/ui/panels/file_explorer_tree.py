@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import uuid
@@ -13,7 +14,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gdk, Gio, GLib, GObject, Gtk, Pango  # noqa: E402
 
-from slate.core.events import FolderOpenedEvent, OpenFileRequestedEvent  # noqa: E402
+from slate.core.events import BaseEvent, FolderOpenedEvent, OpenFileRequestedEvent  # noqa: E402
 
 if TYPE_CHECKING:
     from slate.core.event_bus import EventBus
@@ -66,7 +67,7 @@ class FileExplorerTree(Gtk.Box):
         self._host_bridge = host_bridge
         self._root_path: str | None = None
         self._load_error: str | None = None
-        self._directory_stores: dict[str, Gio.ListStore] = {}
+        self._directory_stores: dict[str, Gio.ListStore[FileTreeItem]] = {}
         self._directory_monitors: dict[str, Gio.FileMonitor] = {}
         self._pending_refresh_paths: set[str] = set()
         self._row_widgets: dict[str, dict[str, Any]] = {}
@@ -138,20 +139,16 @@ class FileExplorerTree(Gtk.Box):
         self._event_bus.unsubscribe(FolderOpenedEvent, self._on_folder_changed)
 
         for monitor in self._directory_monitors.values():
-            try:
+            with contextlib.suppress(Exception):
                 monitor.cancel()
-            except Exception:
-                pass
         self._directory_monitors.clear()
         self._pending_refresh_paths.clear()
 
     def _clear_directory_monitors(self) -> None:
         """Stop all active directory monitors owned by the explorer."""
         for monitor in self._directory_monitors.values():
-            try:
+            with contextlib.suppress(Exception):
                 monitor.cancel()
-            except Exception:
-                pass
         self._directory_monitors.clear()
         self._pending_refresh_paths.clear()
 
@@ -182,10 +179,8 @@ class FileExplorerTree(Gtk.Box):
         for path in stale_paths:
             monitor = self._directory_monitors.pop(path, None)
             if monitor is not None:
-                try:
+                with contextlib.suppress(Exception):
                     monitor.cancel()
-                except Exception:
-                    pass
             self._pending_refresh_paths.discard(path)
 
     def _schedule_directory_refresh(self, path: str) -> None:
@@ -272,7 +267,8 @@ class FileExplorerTree(Gtk.Box):
         model = self._build_folder_menu_model() if item.is_folder else self._build_file_menu_model()
         popover = Gtk.PopoverMenu.new_from_model(model)
         popover.set_parent(self._list_view)
-        rect = Gdk.Rectangle()
+        # Gdk.Rectangle GBoxed constructor is untyped in pygobject-stubs
+        rect = Gdk.Rectangle()  # type: ignore[no-untyped-call]
         rect.x = int(x)
         rect.y = int(y)
         rect.width = 1
@@ -358,6 +354,7 @@ class FileExplorerTree(Gtk.Box):
 
     def _copy_path_to_clipboard(self, path: str) -> None:
         """Copy text to the GTK clipboard."""
+        clipboard: Gdk.Clipboard | None = None
         try:
             clipboard = self.get_clipboard()
         except Exception:
@@ -687,6 +684,7 @@ class FileExplorerTree(Gtk.Box):
         )
         self._tree_model = new_tree_model
         self._selection.set_model(new_tree_model)
+
     def _build_header(self) -> Gtk.Box:
         """Create header with menu button."""
         header_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -753,7 +751,7 @@ class FileExplorerTree(Gtk.Box):
         self._load_error = None
         self._error_label.set_visible(False)
 
-    def _on_create_child_model(self, item: Any) -> Gio.ListStore | None:
+    def _on_create_child_model(self, item: Any) -> Gio.ListStore[FileTreeItem] | None:
         """Create child model lazily when a folder row is expanded."""
         if not isinstance(item, FileTreeItem):
             return None
@@ -762,7 +760,9 @@ class FileExplorerTree(Gtk.Box):
         store, _error = self._create_list_model_for_dir(item.path)
         return store
 
-    def _create_list_model_for_dir(self, dir_path: str | None) -> tuple[Gio.ListStore, str | None]:
+    def _create_list_model_for_dir(
+        self, dir_path: str | None
+    ) -> tuple[Gio.ListStore[FileTreeItem], str | None]:
         """Create a ListStore with items from a directory. Returns (store, error)."""
         store = self._directory_stores.get(dir_path or "")
         if store is None:
@@ -819,7 +819,7 @@ class FileExplorerTree(Gtk.Box):
 
             label = Gtk.Label(xalign=0)
             label.set_hexpand(True)
-            label.set_ellipsize(3)  # PANGO_ELLIPSIZE_END
+            label.set_ellipsize(Pango.EllipsizeMode.END)
 
             entry = Gtk.Entry()
             entry.set_hexpand(True)
@@ -921,7 +921,7 @@ class FileExplorerTree(Gtk.Box):
             entry.set_text(self._edit_text_buffer.get(item.path, item.name))
             entry.set_hexpand(True)
             label.set_hexpand(True)
-            label.set_ellipsize(3)
+            label.set_ellipsize(Pango.EllipsizeMode.END)
             label.set_css_classes(["file-tree-label", "truncate"])
             if item.is_folder:
                 icon.set_from_icon_name("folder-symbolic")
@@ -965,13 +965,16 @@ class FileExplorerTree(Gtk.Box):
         if not isinstance(item, Gtk.TreeListRow):
             return
         tree_item = item.get_item()
-        if tree_item and tree_item.is_folder:
+        if not isinstance(tree_item, FileTreeItem):
+            return
+        if tree_item.is_folder:
             item.set_expanded(not item.get_expanded())
-        elif tree_item:
+        else:
             self._event_bus.emit(OpenFileRequestedEvent(path=tree_item.path))
 
-    def _on_folder_changed(self, event: FolderOpenedEvent) -> None:
+    def _on_folder_changed(self, event: BaseEvent) -> None:
         """Reload tree root when folder changes."""
+        assert isinstance(event, FolderOpenedEvent)
         if os.path.isdir(event.path):
             self.load_folder(event.path)
 
