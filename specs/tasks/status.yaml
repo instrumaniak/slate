@@ -1,0 +1,7 @@
+tasks:
+  T001:
+    name: Fix Mypy Type Errors
+    status: pending
+    depends: ~
+    phase: 0
+    critical: true

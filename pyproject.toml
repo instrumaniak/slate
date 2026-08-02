@@ -135,3 +135,10 @@ warn_no_return = true
 strict_equality = true
 ignore_missing_imports = true
 exclude = ["tests/", "build/", "dist/", "__pycache__/", ".pytest_cache/", ".mypy_cache/"]
+
+[tool.pyright]
+pythonVersion = "3.10"
+typeCheckingMode = "strict"
+reportMissingModuleSource = false
+reportMissingTypeStubs = "none"
+exclude = ["tests/**", "build/**", "dist/**", "__pycache__/**", ".pytest_cache/**", ".mypy_cache/**"]
