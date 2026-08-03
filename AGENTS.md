@@ -110,6 +110,13 @@ slate/
 - ❌ Never use GTK signals for cross-component communication — use `EventBus`
 - ❌ Never configure `GtkSource.View` directly — use `EditorViewFactory`
 
+### Memory Leak Prevention (T003)
+- ❌ **Never set Python instance attributes on GObject wrappers** (`Gtk.*`, `GtkSource.*`, etc.). Setting `self.x = ...` switches PyGObject (≤3.42) into toggle-ref mode, pinning the wrapper + C object alive once the widget is realized → leak. Store state externally (module `WeakKeyDictionary`, `id()`-keyed dict, or locals). Reference fix: `EditorView` in `slate/ui/editor/editor_view.py`.
+- ❌ **Never `connect()` a bound method as a signal handler on a signal that outlives the widget** — the closure pins the widget. Connect a closure that derefs `weakref.ref(self)` and no-ops when the view is gone.
+- ❌ **Never stash GObjects as widget attributes just to keep them alive** (e.g. `view._slate_font_css_provider`). C APIs like `add_provider()` already hold their own ref; the Python attr only adds a retention path.
+- ✅ **Regression pattern**: any widget with signal connections gets a probe test like `tests/ui/gtk/test_tab_memory.py` — count widget instances via a `gc.get_objects()` *generator* (never list comprehension) across N open→close cycles, assert count returns to baseline. Flat instance count + slow RSS growth = allocator retention, **not** a leak.
+- ✅ **pygobject constraint**: this system runs apt `python3-gi` 3.42.1 (toggle-ref leak fixed upstream in 3.56). Do NOT upgrade via `pip --user` (shadows system bindings for all apps); if 3.56 is ever wanted, use a dedicated venv.
+
 ## Testing
 
 ### Test Fixtures (Mandatory)

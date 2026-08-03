@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import weakref
 from collections.abc import Callable, Mapping
 
 import gi
@@ -74,7 +75,6 @@ def apply_editor_settings(view, settings: Mapping[str, str] | None = None) -> No
     provider = Gtk.CssProvider()
     apply_css(provider, css)
     view.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-    view._slate_font_css_provider = provider
 
 
 class EditorView(GtkSource.View):
@@ -89,25 +89,27 @@ class EditorView(GtkSource.View):
         editor_settings: Mapping[str, str] | None = None,
     ) -> None:
         """Initialize EditorView."""
-        self._on_modified_changed = on_modified_changed
-
         from slate.ui.editor.editor_factory import EditorViewFactory
 
         factory = EditorViewFactory()
+
         language_id = factory.detect_language(path)
 
         buffer = factory.create_buffer(content, language_id)
         super().__init__(buffer=buffer)
 
-        buffer.connect("modified-changed", self._on_buffer_modified)
+        weakself = weakref.ref(self)
+        callback = on_modified_changed
+
+        def _on_buffer_modified(buf) -> None:
+            view = weakself()
+            if view is not None and callback is not None:
+                callback(buf.get_modified())
+
+        buffer.connect("modified-changed", _on_buffer_modified)
         factory.apply_scheme(buffer, editor_scheme)
 
         self._setup_basic_properties(editor_settings)
-
-    def _on_buffer_modified(self, buffer) -> None:
-        """Handle buffer modified state change."""
-        if self._on_modified_changed:
-            self._on_modified_changed(buffer.get_modified())
 
     def _setup_basic_properties(self, settings: Mapping[str, str] | None = None) -> None:
         """Configure basic editor properties."""

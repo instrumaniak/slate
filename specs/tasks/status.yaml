@@ -12,3 +12,9 @@ tasks:
       - T001
     phase: 0
     critical: true
+  T003:
+    name: Memory leak investigation
+    status: done
+    depends: ~
+    phase: 0
+    critical: false
